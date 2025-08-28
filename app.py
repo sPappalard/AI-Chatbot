@@ -7,7 +7,7 @@ from collections import defaultdict
 from numpy.core.multiarray import scalar
 import numpy as np
 
-#Framework web to create API REST
+#Framework web to create API REST 
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 
@@ -119,13 +119,13 @@ class APIRateLimiter:
 # Initialize rate limiter
 rate_limiter = APIRateLimiter()
 
-#----------------------------------------------
+#---------------------------------------------
 #Neural Netword Model for intent classification:
 #-BASE: DistilBERT (pre-trained)(768 dimensions)
 #-1. Layer: 768->256 + BatchNorm + Dropout + GELU 
 #-2. Layer: 256->128 + BatchNorm + Dropout + GELU
 #-3. Layer: 128->num_classed (final output)
-#----------------------------------------------
+#---------------------------------------------
 class ImprovedChatbotModel(nn.Module):
     def __init__(self, bert_hidden_size, num_classes, hidden_size=256, dropout_rate=0.3):
         super().__init__()
