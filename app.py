@@ -732,7 +732,7 @@ class EnhancedChatbotAssistant:
     #to do management
     def manage_todo(self, user_id, action, task=None, priority=1):
         if action == 'add' and task:
-            # Estrai priorità dal testo se presente
+            # Extract priority from text if present and set it
             if any(word in task.lower() for word in ['importante', 'urgente', 'priorità']):
                 priority = 3
             elif any(word in task.lower() for word in ['bassa', 'quando possibile']):
@@ -740,6 +740,7 @@ class EnhancedChatbotAssistant:
             else:
                 priority = 2
             
+            #insert task into db (with priority)
             with self.memory.get_db() as conn:
                 conn.execute('INSERT INTO todos (user_id, task, priority) VALUES (?, ?, ?)', 
                            (user_id, task, priority))
@@ -747,7 +748,8 @@ class EnhancedChatbotAssistant:
             
             priority_text = {1: "bassa", 2: "media", 3: "alta"}[priority]
             return f"✅ Aggiunto '{task}' con priorità {priority_text}."
-            
+
+        #show task list order by priority    
         elif action == 'list':
             with self.memory.get_db() as conn:
                 cursor = conn.execute('''
@@ -769,7 +771,8 @@ class EnhancedChatbotAssistant:
             
             result += "\n💡 *Scrivi 'completa [numero]' per completare un task*"
             return result
-            
+
+        #complete task (set as completed)     
         elif action == 'complete' and task:
             try:
                 task_id = int(task)
@@ -789,57 +792,69 @@ class EnhancedChatbotAssistant:
                 return "❌ ID task non valido."
                 
         return "❓ Comando todo non riconosciuto. Prova: 'aggiungi [task]', 'mostra lista', 'completa [id]'"
-
+    
+    #-------------------
+    # Message processing
+    #-------------------
     def process_message(self, message, user_id):
         input_ids, attention_mask = self.encode_text(message)
         
+        #tokenize message and send it to the model
         with torch.no_grad():
             outputs = self.model(input_ids, attention_mask)
             confidence_scores = torch.softmax(outputs, dim=1)
+            #obtain prediction and confidence score
             predicted_idx = torch.argmax(outputs, dim=1).item()
             confidence = confidence_scores[0][predicted_idx].item()
         
-        # Usa idx_to_label se disponibile, altrimenti fallback
+        # Use idx_to_label if available, otherwise fallback
         if self.idx_to_label:
+            #return predicted intent
             intent = self.idx_to_label[predicted_idx]
         else:
+            #return predicted intent
             intent = self.intents[predicted_idx] if predicted_idx < len(self.intents) else 'unknown'
         
-        # Soglia di confidenza per risposte generiche - aumentata a 0.8 per essere più restrittivi
+        # Confidence threshold for asking clarification
         if confidence < 0.5:
             help_message = self.get_help_message()
             response = f"🤔 Non sono sicuro di aver capito la tua richiesta. {help_message}"
         
+        #------------------------
         # Handle specific intents
+        #------------------------
+
+        # CASE 1: stocks
         elif intent == 'stocks':
             if 'crypto' in message.lower() or 'bitcoin' in message.lower():
                 response = self.get_crypto_prices()
             else:
-                # Controlla se chiede la lista delle azioni disponibili
+                # Check if it asks for the list of available actions
                 if any(phrase in message.lower() for phrase in ['disponibili', 'lista', 'elenco', 'quali azioni', 'che azioni']):
                     response = self.get_stocks_help_message()
                 else:
-                    # Estrai il simbolo dello stock dal messaggio
+                    # Extract the stock symbol from the message
                     stock_symbol = self.extract_stock_symbol(message)
                     
                     if stock_symbol:
-                        # Azione trovata E supportata - prova prima con API reale
+                        # Action found and supported - try real API first
                         if stock_symbol in self.stock_symbols_display:
                             response = self.get_stock_prices_real(stock_symbol)
                         else:
-                            # Azione riconosciuta ma non supportata dalle API
+                            # Action recognized but not supported by APIs
                             response = f"❌ **Azione '{stock_symbol}' non supportata dalle nostre API.**\n\n{self.get_stocks_help_message()}"
                     else:
-                        # Nessuna azione specificata o non riconosciuta
+                        # No actions specified or not recognized
                         if any(word in message.lower() for word in ['prezzo', 'quanto', 'valore', 'quotazione', 'stock', 'azione']):
-                            # Ha chiesto un prezzo ma senza specificare l'azione o azione non riconosciuta
+                            # User asked for a price but without specifying the unrecognized stock or stock
                             response = f"🤔 **Dimmi quale azione ti interessa!**\n\n{self.get_stocks_help_message()}"
                         else:
-                            # Richiesta generica di stocks - mostra help
+                            # Generic request for stocks - show help
                             response = f"📊 **Servizio Azioni Disponibile!**\n\n{self.get_stocks_help_message()}"
                         
+        # CASE 2: weather
         elif intent == 'weather':
-            # Estrai città dal messaggio se presente
+            # Extract city from message if present
             city = "Roma"  # Default
             italian_cities = ['roma', 'milano', 'napoli', 'torino', 'palermo', 'genova', 'bologna', 'firenze', 'bari', 'catania']
             for c in italian_cities:
@@ -848,42 +863,54 @@ class EnhancedChatbotAssistant:
                     break
             response = self.get_weather_real(city)
             
+        # CASE 3: news
         elif intent == 'news':
             response = self.get_news_real()
-            
+        
+        # CASE 4: time
         elif intent == 'time':
             response = self.get_current_time()
-            
+
+        # CASE 5: joke
         elif intent == 'joke':
             response = self.get_joke()
-            
+        
+        # CASE 6: to do
         elif intent == 'todo':
+            #extract task from message 
             if 'aggiungi' in message.lower():
                 task = message.lower().replace('aggiungi', '').strip()
                 task = task.replace('alla lista', '').replace('todo', '').strip()
                 if task:
+                    #add task 
                     response = self.manage_todo(user_id, 'add', task)
                 else:
                     response = "❓ Cosa devo aggiungere alla lista?"
+            #show to do list
             elif any(word in message.lower() for word in ['mostra', 'lista', 'elenco', 'visualizza']):
                 response = self.manage_todo(user_id, 'list')
+            #complete task
             elif 'completa' in message.lower():
                 for word in message.split():
                     if word.isdigit():
                         response = self.manage_todo(user_id, 'complete', word)
                         break
                 else:
+                    #which task do you want to complete?
                     response = "❓ Specifica il numero del task da completare (es: 'completa 1')"
             else:
+                #add task
                 response = self.manage_todo(user_id, 'list')
-                
+      
+        # CASE 7: greeting
         elif intent == 'greeting':
             responses = self.intents_data.get(intent, {}).get('responses', [])
             if responses:
                 response = random.choice(responses) + " " + self.get_help_message()
             else:
                 response = "Ciao! " + self.get_help_message()
-                
+
+        # CASE 8: thanks
         elif intent == 'thanks':
             responses = self.intents_data.get(intent, {}).get('responses', [])
             if responses:
@@ -891,9 +918,11 @@ class EnhancedChatbotAssistant:
             else:
                 response = "Di niente! Sono qui per aiutarti. 😊"
 
+        # CASE 9: help
         elif intent == 'help':
             response = self.get_help_message()        
         
+        ##########################
         else:
             # Prima prova le risposte standard degli intent (mood,name,goodbye)
             responses = self.intents_data.get(intent, {}).get('responses', [])
