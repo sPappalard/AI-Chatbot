@@ -79,13 +79,7 @@
         "Weather forecast", "Rain today?", "Sunny?", "Cloudy?", "Temperature now",
         "Meteo Napoli", "Tempo Torino", "Clima Palermo", "Meteo Bari", "Tempo Firenze"
       ],
-      "responses": [
-        "🌤️ Controllo le previsioni meteo per te...",
-        "Vuoi sapere il tempo per oggi o per i prossimi giorni?",
-        "Ecco le informazioni meteo attuali per la tua zona.",
-        "Ti aggiorno sul meteo della tua città.",
-        "Controllo subito il meteo per te! 🌡️"
-      ]
+      "responses": []
     },
     {
       "tag": "stocks",
@@ -101,13 +95,7 @@
         "Criptovalute", "Bitcoin", "Ethereum", "Crypto", "BTC", "ETH",
         "Prezzi crypto", "Mercato crypto", "Andamento Bitcoin", "Valore Ethereum"
       ],
-      "responses": [
-        "📈 Controllo le ultime quotazioni azionarie per te...",
-        "Vuoi sapere il prezzo delle azioni di una società specifica?",
-        "Ecco l'aggiornamento del mercato azionario attuale.",
-        "Ti mostro i dati della borsa più recenti.",
-        "Aggiornamento mercati in arrivo! 💹"
-      ]
+      "responses": []
     },
     {
       "tag": "news",
@@ -122,13 +110,7 @@
         "Notizie Italia", "News mondo", "Cronaca locale", "Politica", "Sport news",
         "Tech news", "Economia news", "Salute news", "Scienza news"
       ],
-      "responses": [
-        "📰 Ti mostro le ultime notizie aggiornate...",
-        "Ecco le news più recenti per te.",
-        "Vuoi notizie locali, nazionali o internazionali?",
-        "Controllo gli ultimi aggiornamenti informativi.",
-        "News in arrivo! 📺"
-      ]
+      "responses": []
     },
     {
       "tag": "todo",
@@ -144,13 +126,7 @@
         "Aggiungi comprare il pane", "Ricordami di", "Non dimenticare",
         "Segna che devo", "Appunta", "Nota", "Reminder", "Memo"
       ],
-      "responses": [
-        "📝 Ecco la gestione della tua lista attività...",
-        "Vuoi aggiungere un nuovo task alla lista?",
-        "Ti mostro i task completati e quelli ancora da fare.",
-        "Gestisco i tuoi promemoria e attività.",
-        "Organizziamo insieme la tua giornata! ✅"
-      ]
+      "responses": []
     },
     {
       "tag": "help",
@@ -164,11 +140,7 @@
         "Come posso usarti", "Che servizi offri", "Lista comandi",
         "Menu", "Opzioni disponibili", "Features", "Services", "Commands list"
       ],
-      "responses": [
-        "Ecco cosa posso fare per te...",
-        "Posso aiutarti con...",
-        "Questi sono i comandi che supporto..."
-      ]
+      "responses": []
     },
     {
       "tag": "name",
@@ -214,12 +186,7 @@
         "Orario", "Ora esatta", "Che ore sono adesso", "L'ora per favore",
         "Orologio", "Tempo attuale", "Hour", "Che ora fa", "Ore"
       ],
-      "responses": [
-        "🕐 Ti mostro l'ora attuale per te.",
-        "⏰ Controllo l'orario in questo momento.",
-        "🕒 Ecco l'ora esatta per la tua zona.",
-        "⏱️ Aggiornamento orario in arrivo!"
-      ]
+      "responses": []
     },
     {
       "tag": "joke",
@@ -229,12 +196,7 @@
         "Make me laugh", "Tell me a joke", "Funny", "Humor",
         "Ridere", "Divertente", "Comico", "Spiritoso", "Una risata"
       ],
-      "responses": [
-        "😄 Perché i programmatori preferiscono il buio? Perché la luce attira i bug!",
-        "🤣 Come chiami un pesce con due ginocchia? Un pesce-ginocchio!",
-        "😂 Cosa dice un AI quando è felice? 'Sono a 1 e 0 dalla felicità!'",
-        "😆 Perché l'AI non si ammala mai? Perché ha sempre l'antivirus aggiornato!"
-      ]
+      "responses": []
     }
   ]
 }

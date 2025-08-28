@@ -241,21 +241,30 @@ class ConversationMemory:
             #return all rows resulting from query 
             return cursor.fetchall()
 
+#Chatbot main class  
 class EnhancedChatbotAssistant:
     def __init__(self, intents_path):
+        #path of intents file
         self.intents_path = intents_path
+        #model
         self.model = None
+        #list of intents
         self.intents = []
+        #dict for complete data intents
         self.intents_data = {}
+        #mapping for conversions
         self.label_to_idx = {}
         self.idx_to_label = {}
+        #instance to memorize conversation
         self.memory = ConversationMemory()
+        
+        #load intents and model
         self.load_intents()
         self.load_model()
 
-            # Lista corposa di azioni disponibili con mappature
+            #dictonary mapping company names to their stocl symbol
         self.available_stocks = {
-            # Tech Giants
+            #tech
             'apple': 'AAPL', 'aapl': 'AAPL',
             'microsoft': 'MSFT', 'msft': 'MSFT',
             'google': 'GOOGL', 'googl': 'GOOGL', 'alphabet': 'GOOGL',
@@ -267,7 +276,7 @@ class EnhancedChatbotAssistant:
             'amd': 'AMD', 'advanced micro devices': 'AMD',
             'intel': 'INTC', 'intc': 'INTC',
             
-            # Finanziari
+            #finance
             'jpmorgan': 'JPM', 'jp morgan': 'JPM', 'jpm': 'JPM',
             'bank of america': 'BAC', 'bac': 'BAC',
             'wells fargo': 'WFC', 'wfc': 'WFC',
@@ -277,33 +286,33 @@ class EnhancedChatbotAssistant:
             'mastercard': 'MA', 'ma': 'MA',
             'paypal': 'PYPL', 'pypl': 'PYPL',
             
-            # Salute e Farmaceutico
+            #health
             'johnson & johnson': 'JNJ', 'jnj': 'JNJ', 'johnson johnson': 'JNJ',
             'pfizer': 'PFE', 'pfe': 'PFE',
             'moderna': 'MRNA', 'mrna': 'MRNA',
             'abbott': 'ABT', 'abt': 'ABT',
             'merck': 'MRK', 'mrk': 'MRK',
             
-            # Energia
+            #energy
             'exxon': 'XOM', 'exxon mobil': 'XOM', 'xom': 'XOM',
             'chevron': 'CVX', 'cvx': 'CVX',
             'conocophillips': 'COP', 'cop': 'COP',
             
-            # Beni di consumo
+            #consumer goods
             'coca cola': 'KO', 'coca-cola': 'KO', 'ko': 'KO',
             'pepsi': 'PEP', 'pep': 'PEP', 'pepsico': 'PEP',
             'procter gamble': 'PG', 'pg': 'PG', 'procter & gamble': 'PG',
             'nike': 'NKE', 'nke': 'NKE',
             'adidas': 'ADDYY', 'addyy': 'ADDYY',
             
-            # Industriali
+            #industrial
             'boeing': 'BA', 'ba': 'BA',
             'caterpillar': 'CAT', 'cat': 'CAT',
             '3m': 'MMM', 'mmm': 'MMM',
             'general electric': 'GE', 'ge': 'GE',
             'lockheed martin': 'LMT', 'lmt': 'LMT',
             
-            # Retail e Servizi
+            # Retail e Services
             'walmart': 'WMT', 'wmt': 'WMT',
             'home depot': 'HD', 'hd': 'HD',
             'mcdonalds': 'MCD', 'mcd': 'MCD', "mcdonald's": 'MCD',
@@ -315,9 +324,9 @@ class EnhancedChatbotAssistant:
             'at&t': 'T', 'att': 'T', 'at t': 'T',
             't-mobile': 'TMUS', 'tmus': 'TMUS', 'tmobile': 'TMUS',
             
-            # Altri popolari
+            # other 
             'berkshire hathaway': 'BRK.B', 'berkshire': 'BRK.B', 'brk': 'BRK.B',
-            'warren buffett': 'BRK.B',  # Associazione comune
+            'warren buffett': 'BRK.B',  
             'ibm': 'IBM',
             'oracle': 'ORCL', 'orcl': 'ORCL',
             'salesforce': 'CRM', 'crm': 'CRM',
@@ -333,19 +342,20 @@ class EnhancedChatbotAssistant:
             'snowflake': 'SNOW', 'snow': 'SNOW'
         }
         
-        # Lista ordinata per display (simboli unici)
+        # create a sorted list (without duplicates) for the display
         self.stock_symbols_display = sorted(list(set(self.available_stocks.values())))
     
+    #to exstract stock symbol from user's message
     def extract_stock_symbol(self, message):
         """Estrae il simbolo dello stock dal messaggio"""
         message_lower = message.lower()
         
-        # Controlla ogni keyword
+        # search for keyword in the message, if it find one-> return corrispective symbol
         for keyword, symbol in self.available_stocks.items():
             if keyword in message_lower:
                 return symbol
         
-        # Controlla se è stato inserito direttamente un simbolo
+        # Check if a symbol has been inserted directly
         words = message_lower.split()
         for word in words:
             word_upper = word.upper()
@@ -354,9 +364,9 @@ class EnhancedChatbotAssistant:
         
         return None
 
+    #to generate an help message about best available stocks (group by categories)
     def get_stocks_help_message(self):
         """Restituisce messaggio di aiuto per le azioni"""
-        # Raggruppa per categoria per una visualizzazione migliore
         categories = {
             "🔥 **Tech Giants**": ["AAPL", "MSFT", "GOOGL", "META", "AMZN", "NFLX", "TSLA", "NVDA"],
             "🏦 **Finanziari**": ["JPM", "BAC", "WFC", "GS", "V", "MA", "PYPL"],
@@ -372,13 +382,13 @@ class EnhancedChatbotAssistant:
         
         for category, symbols in categories.items():
             result += f"{category}:\n"
-            # Mostra max 8 simboli per categoria per non sovraccaricare
             display_symbols = symbols[:8]
             result += f"   {' • '.join(display_symbols)}"
             if len(symbols) > 8:
                 result += f" *+{len(symbols)-8} altri*"
             result += "\n\n"
         
+        #example of good prompts
         result += "💡 **Esempi di utilizzo:**\n"
         result += "• 'Prezzo azioni Apple' o 'Quanto vale AAPL?'\n"
         result += "• 'Azioni Tesla oggi' o 'Azioni TSLA'\n"
@@ -387,6 +397,7 @@ class EnhancedChatbotAssistant:
         
         return result
 
+    #to load intents.json and to populate lists and dicts with intents data
     def load_intents(self):
         with open(self.intents_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -394,16 +405,18 @@ class EnhancedChatbotAssistant:
                 self.intents.append(intent['tag'])
                 self.intents_data[intent['tag']] = intent
 
+    #to load trained model
     def load_model(self):
         if not os.path.exists('chatbot_distilbert_robust.pth'):
             raise FileNotFoundError("❌ File chatbot_distilbert_robust.pth non trovato. Devi addestrare e salvare il modello prima.")
 
         checkpoint = torch.load('chatbot_distilbert_robust.pth', map_location='cpu',weights_only=False)
-
         num_classes = checkpoint.get('num_classes', len(self.intents))
+        
         self.model = ImprovedChatbotModel(768, num_classes, hidden_size=256, dropout_rate=0.3)
+        #load weights of the trained model
         self.model.load_state_dict(checkpoint['model_state_dict'])
-
+        #load label mappings 
         self.label_to_idx = checkpoint.get('label_to_idx', {tag: i for i, tag in enumerate(self.intents)})
         self.idx_to_label = checkpoint.get('idx_to_label', {i: tag for i, tag in enumerate(self.intents)})
 
@@ -411,8 +424,10 @@ class EnhancedChatbotAssistant:
         print(f"✅ Modello chatbot_distilbert_robust.pth caricato con successo" +
             (f" (best acc: {best_acc:.2f}%)" if best_acc is not None else ""))
 
+        #set the model in EVAL mode (no training)
         self.model.eval()
 
+    #ENCODE TEXT: tokenize text using DistilBERT's tokenizer and prepare input for ML model
     def encode_text(self, text):
         encoding = tokenizer(
             text,
@@ -423,9 +438,14 @@ class EnhancedChatbotAssistant:
         )
         return encoding['input_ids'], encoding['attention_mask']
 
+#------------------------------------
+#REAL API SERVICES(with rate limiting)
+#------------------------------------
+
+    # to return real weather (API: OpenWeatherMap)
     def get_weather_real(self, city="Roma"):
         """API OpenWeatherMap con rate limiting"""
-        # Controlla rate limit
+        # check rate limit
         can_request, message = rate_limiter.can_make_request('weather')
         if not can_request:
             return f"⚠️ {message}. Riprova domani!"
@@ -445,7 +465,7 @@ class EnhancedChatbotAssistant:
             data = response.json()
             
             if response.status_code == 200:
-                # Incrementa contatore solo se richiesta riuscita
+                #UPTADE rate limiter
                 rate_limiter.increment_counter('weather')
                 
                 temp = data['main']['temp']
@@ -453,7 +473,7 @@ class EnhancedChatbotAssistant:
                 humidity = data['main']['humidity']
                 description = data['weather'][0]['description']
                 
-                # Aggiungi info sui limiti rimanenti
+                # add limits info
                 stats = rate_limiter.get_stats()['weather']
                 
                 return f"🌤️ **Meteo {city}:**\n" \
@@ -468,6 +488,7 @@ class EnhancedChatbotAssistant:
             print(f"Weather API error: {e}")
             return self.get_weather_fallback(city)
 
+    #return simulated weather (only if API failed)
     def get_weather_fallback(self, city):
         """Meteo simulato se API non disponibile o limite superato"""
         temps = [18, 19, 20, 21, 22, 23, 24, 25]
@@ -478,9 +499,10 @@ class EnhancedChatbotAssistant:
                f"☁️ Condizioni: {random.choice(conditions)}\n" \
                f"💧 Umidità: {random.randint(45, 75)}%"
 
+    # to return real stock prices (API: Alpha Vantage)
     def get_stock_prices_real(self, symbol=None):
         """API Alpha Vantage con rate limiting per stock specifici"""
-        # Controlla rate limit
+        # check rate limit
         can_request, message = rate_limiter.can_make_request('stocks')
         if not can_request:
             return f"⚠️ {message}. Riprova tra qualche minuto!"
@@ -489,11 +511,9 @@ class EnhancedChatbotAssistant:
             return self.get_stock_prices_fallback(symbol)
         
         try:
-            # Se non viene specificato uno stock, usa AAPL come default
+            # If a stock is not specified, use AAPL as the default
             if not symbol:
                 symbol = 'AAPL'
-            
-            # Converti il simbolo in maiuscolo
             symbol = symbol.upper()
             
             url = f"https://www.alphavantage.co/query"
@@ -506,12 +526,12 @@ class EnhancedChatbotAssistant:
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
             
-            # Debug: stampa la risposta dell'API
+            # Debug: print API response
             print(f"Stock API response for {symbol}: {response.status_code}")
             print(f"Stock API data: {data}")
             
             if 'Global Quote' in data and data['Global Quote']:
-                # Incrementa contatore solo se richiesta riuscita
+                # update rate limiter
                 rate_limiter.increment_counter('stocks')
                 
                 quote = data['Global Quote']
@@ -521,7 +541,7 @@ class EnhancedChatbotAssistant:
                 
                 emoji = "📈" if change > 0 else "📉" if change < 0 else "➡️"
                 
-                # Aggiungi info sui limiti rimanenti
+                #add limits info
                 stats = rate_limiter.get_stats()['stocks']
                 
                 return f"📊 **Prezzo Azione {symbol}:**\n" \
@@ -536,9 +556,9 @@ class EnhancedChatbotAssistant:
             print(f"Stock API exception for {symbol}: {e}")
             return self.get_stock_prices_fallback(symbol)
 
+    #to return (randomly) simulated stock prices (only if API failed or stock not available)
     def get_stock_prices_fallback(self, symbol=None):
         """Prezzi stock simulati - SOLO quando API non disponibile o azione non supportata"""
-        # Prezzi simulati per le azioni più popolari
         popular_stocks = {
             'AAPL': random.uniform(180, 190),
             'MSFT': random.uniform(370, 380), 
@@ -558,20 +578,17 @@ class EnhancedChatbotAssistant:
         
         if symbol:
             symbol = symbol.upper()
-            # Verifica se il simbolo è tra quelli supportati
             if symbol in self.stock_symbols_display:
-                # Azione supportata - usa prezzo simulato SOLO come fallback API
                 price = popular_stocks.get(symbol, random.uniform(50, 500))
                 change = random.choice(["📈", "📉", "➡️"])
                 pct = random.uniform(-5, 5)
                 return f"📊 **Prezzo Azione {symbol}** (simulato - API non disponibile):\n💰 **{symbol}**: ${price:.2f} {change} {pct:+.2f}%"
             else:
-                # Azione NON supportata
                 return f"❌ **Azione '{symbol}' non supportata.**\n\n{self.get_stocks_help_message()}"
         
-        # Se non specificato, mostra alcune azioni popolari (solo se API non disponibile)
+        # if stock not specificated 
         result = "📊 **Top Azioni** (simulato - API non disponibile):\n\n"
-        display_stocks = dict(list(popular_stocks.items())[:8])  # Mostra prime 8
+        display_stocks = dict(list(popular_stocks.items())[:8])  # shows first 8 stocks
         
         for symbol, price in display_stocks.items():
             change = random.choice(["📈", "📉", "➡️"])
@@ -582,10 +599,11 @@ class EnhancedChatbotAssistant:
         result += f"📋 *{len(self.stock_symbols_display)} azioni disponibili - scrivi 'azioni disponibili' per la lista completa*"
         
         return result
-
+    
+    # to return real news from US (API: NewsAPI)
     def get_news_real(self):
         """API NewsAPI con rate limiting"""
-        # Controlla rate limit
+        # check rate limit
         can_request, message = rate_limiter.can_make_request('news')
         if not can_request:
             return f"⚠️ {message}. Riprova domani!"
@@ -606,7 +624,7 @@ class EnhancedChatbotAssistant:
             data = response.json()
             
             if response.status_code == 200 and data['articles']:
-                # Incrementa contatore solo se richiesta riuscita
+                #update rate limiter
                 rate_limiter.increment_counter('news')
                 
                 news_text = "📰 **Ultime Notizie dagli Stati Uniti:**\n\n"
@@ -621,7 +639,7 @@ class EnhancedChatbotAssistant:
                     news_text += f"**{i}.** {title}\n"
                     news_text += f"   *Fonte: {source}*\n\n"
                 
-                # Aggiungi info sui limiti rimanenti
+                # add limit info
                 stats = rate_limiter.get_stats()['news']
                 news_text += f"📊 *API calls rimanenti oggi: {stats['remaining']}/{stats['limit']}*"
                 
@@ -633,6 +651,7 @@ class EnhancedChatbotAssistant:
             print(f"News API error: {e}")
             return self.get_news_fallback()
 
+    #to return simulated news (only if API failed)
     def get_news_fallback(self):
         """Notizie simulate"""
         fake_news = [
@@ -649,6 +668,7 @@ class EnhancedChatbotAssistant:
         
         return result
 
+    # to return real crypto prices (API: CoinGecko) (no rate limiting needded)
     def get_crypto_prices(self):
         """API CoinGecko gratuita (no rate limiting necessario)"""
         try:
@@ -689,6 +709,7 @@ class EnhancedChatbotAssistant:
             print(f"Crypto API error: {e}")
             return "❌ Servizio crypto temporaneamente non disponibile"
 
+    #to terurn current time 
     def get_current_time(self):
         """Ora attuale"""
         now = datetime.now()
@@ -696,6 +717,7 @@ class EnhancedChatbotAssistant:
                f"📅 **Data:** {now.strftime('%d/%m/%Y')}\n" \
                f"📆 **Giorno:** {now.strftime('%A')}"
 
+    #to return a random joke
     def get_joke(self):
         """Barzellette casuali"""
         jokes = [
@@ -707,6 +729,7 @@ class EnhancedChatbotAssistant:
         ]
         return random.choice(jokes)
 
+    #to do management
     def manage_todo(self, user_id, action, task=None, priority=1):
         if action == 'add' and task:
             # Estrai priorità dal testo se presente
