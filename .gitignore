@@ -1,3 +1,2 @@
 .env
 conversations.db
-chatbot_distilbert_robust.pth
