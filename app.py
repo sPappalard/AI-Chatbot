@@ -992,7 +992,7 @@ def chat():
         'user_id': user_id
     })
 
-# endpoint /chat: used to return last 10 user's conversation
+# endpoint /history: used to return last 10 user's conversation
 @app.route('/history', methods=['GET'])
 def history():
     user_id = session.get('user_id', 'anonymous')
@@ -1001,6 +1001,7 @@ def history():
     #convert to DICT for the JSON serialization
     return jsonify({'history': [dict(h) for h in history]})
 
+# endpoint /api-stats: used to visualize API stats
 @app.route('/api-stats', methods=['GET'])
 def api_stats():
     """Endpoint per vedere statistiche uso API"""
@@ -1010,17 +1011,18 @@ def api_stats():
         'timestamp': datetime.now().isoformat()
     })
 
+# ONLY FOR ADMIN!! (Change in prod)
+# endpoint /reset-limits: used to reset API limit (requires admin key)
 @app.route('/reset-limits', methods=['POST'])
 def reset_limits():
     """Endpoint per resettare i limiti (solo per admin/development)"""
-    # In produzione potresti voler aggiungere autenticazione qui
     admin_key = request.json.get('admin_key') if request.json else None
-    expected_key = os.environ.get('ADMIN_KEY', 'admin123')  # Cambia in produzione!
+    expected_key = os.environ.get('ADMIN_KEY', 'admin123')  
     
     if admin_key != expected_key:
         return jsonify({'error': 'Unauthorized'}), 401
     
-    # Reset contatori
+    # Reset counters
     today = datetime.now().date()
     for api_type in rate_limiter.daily_counters:
         rate_limiter.daily_counters[api_type]['count'] = 0
@@ -1036,7 +1038,7 @@ def reset_limits():
     })
 
 
-
+# endpoint /health: used to check service state (chek uploaded model, setted API Keys, usage stats)
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({
