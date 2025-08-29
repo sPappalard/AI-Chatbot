@@ -922,14 +922,15 @@ class EnhancedChatbotAssistant:
         elif intent == 'help':
             response = self.get_help_message()        
         
-        ##########################
+        # CASE 10:greeting - mood - name - goodbye - thanks
         else:
-            # Prima prova le risposte standard degli intent (mood,name,goodbye)
+            # First try the standard responses of intent 
             responses = self.intents_data.get(intent, {}).get('responses', [])
+            # if there are available responses: use a random response: among those predefined for that intent 
             if responses:
                 response = random.choice(responses)
             else:
-                # Solo se non ci sono risposte standard, mostra il messaggio di aiuto
+                # show error message
                 help_message = self.get_help_message()
                 response = f"❓ Non ho riconosciuto la tua richiesta. {help_message}"
        
@@ -937,6 +938,7 @@ class EnhancedChatbotAssistant:
         self.memory.add_conversation(user_id, message, response, intent)
         return response, intent, confidence
     
+    # to return hel message
     def get_help_message(self):
         """Restituisce un messaggio di aiuto con esempi di comandi"""
         help_examples = [
@@ -958,23 +960,30 @@ class EnhancedChatbotAssistant:
 # Initialize assistant
 assistant = EnhancedChatbotAssistant('intents.json')
 
+#main route (web page)
 @app.route('/')
 def index():
+    #create a unique ID user 
     if 'user_id' not in session:
         session['user_id'] = str(uuid.uuid4())
     return render_template('index.html')
 
+# endpoint /chat: used to send messages (only POST) 
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
+    #return the message
     message = data.get('message', '').strip()
+    #return user id
     user_id = session.get('user_id', 'anonymous')
     
     if not message:
         return jsonify({'error': 'No message provided'}), 400
     
+    #process message using AI Chatbot
     response, intent, confidence = assistant.process_message(message, user_id)
     
+    #return a json response with (response, intent, confidence, timestamp and user id)
     return jsonify({
         'response': response,
         'intent': intent,
@@ -983,10 +992,13 @@ def chat():
         'user_id': user_id
     })
 
+# endpoint /chat: used to return last 10 user's conversation
 @app.route('/history', methods=['GET'])
 def history():
     user_id = session.get('user_id', 'anonymous')
+    #read from DB 
     history = assistant.memory.get_recent_context(user_id, limit=10)
+    #convert to DICT for the JSON serialization
     return jsonify({'history': [dict(h) for h in history]})
 
 @app.route('/api-stats', methods=['GET'])
