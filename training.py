@@ -250,7 +250,7 @@ def prepare_robust_data(file_path='intents.json'):
         print(f"  {idx_to_label[label_idx]}: {count} esempi")
     
     # Data augmentation (to increase size and variability)
-    texts, labels = advanced_data_augmentation(texts, labels, augment_factor=3)
+    texts, labels = advanced_data_augmentation(texts, labels)
     print(f"Esempi dopo augmentation: {len(texts)}")
     
     #to analyze new distribution
