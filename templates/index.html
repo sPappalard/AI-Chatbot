@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Assistant 🤖</title>
+    <title>AI Chatbot 🤖</title>
     <style>
         :root {
             /* Light theme */
@@ -574,11 +574,11 @@
             animation: fadeInScale 0.3s ease;
         }
 
-                /* Assicura che i pulsanti non si sovrappongano al contenuto */
+                
         .message-content {
             position: relative;
-            padding-bottom: 2.5rem; /* Spazio per i pulsanti di azione */
-            min-height: 60px; /* Altezza minima per contenere i pulsanti */
+            padding-bottom: 2.5rem; 
+            min-height: 60px; 
         }
 
         .message-actions {
@@ -595,14 +595,14 @@
             opacity: 1;
         }
 
-        /* Migliora lo scrolling per messaggi lunghi */
+        
         .chat-messages {
             overflow-y: auto;
             max-height: 60vh;
             scroll-behavior: smooth;
         }
 
-        /* Stile per la tabella delle statistiche */
+        
         .stats-table {
             width: 100%;
             border-collapse: collapse;
@@ -649,7 +649,7 @@
                 📊
             </button>
         </div>
-        <h1>🤖 AI Assistant</h1>
+        <h1>🤖 AI Chatbot</h1>
         <p>Il tuo assistente intelligente per meteo, notizie, azioni e molto altro!</p>
     </div>
 
@@ -909,7 +909,7 @@
             document.body.appendChild(modal);
         }
 
-        // Show API statistics in a modal instead of alert
+        // Show API statistics in a modal
         async function showStats() {
             try {
                 const response = await fetch('/api-stats');
@@ -1068,18 +1068,15 @@
             content.innerHTML = formatResponse(message);
 
             // Add message actions for bot messages
-            // Add message actions for bot messages
             if (!isUser) {
                 const actions = document.createElement('div');
                 actions.className = 'message-actions';
-                // Rimuovi il pulsante di lettura e mantieni solo copia
                 actions.innerHTML = `
                     <button class="action-btn" onclick="copyMessage(this)" title="Copia">📋</button>
                 `;
                 content.appendChild(actions);
                 
-                // Assicurati che i pulsanti non si sovrappongano al contenuto
-                content.style.paddingBottom = '2.5rem'; // Spazio extra per i pulsanti
+                content.style.paddingBottom = '2.5rem'; 
             }
             
             messageDiv.appendChild(avatar);
@@ -1112,25 +1109,25 @@
             updateStats();
         }
 
-        // Copy message function - improved to preserve formatting
+        // Copy message function - preserve formatting
         function copyMessage(btn) {
             const messageContent = btn.closest('.message-content');
             
-            // Crea un elemento temporaneo per estrarre il testo formattato
+            // Creates a temporary element to extract formatted text
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = messageContent.innerHTML;
             
-            // Rimuovi i pulsanti di azione e i metadati
+            // Remove action buttons and metadata
             const actions = tempDiv.querySelector('.message-actions');
             if (actions) actions.remove();
             
             const meta = tempDiv.querySelector('.message-meta');
             if (meta) meta.remove();
             
-            // Ottieni il testo pulito mantenendo la formattazione di base
+            // Get clean text while maintaining basic formatting
             let textToCopy = tempDiv.textContent.trim();
             
-            // Migliora la formattazione per elementi comuni
+            // Improves formatting for common items
             textToCopy = textToCopy
                 .replace(/\*\*(.*?)\*\*/g, '$1') // Grassetto
                 .replace(/\*(.*?)\*/g, '$1')     // Corsivo
