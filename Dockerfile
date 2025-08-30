@@ -1,4 +1,4 @@
-# Usa Python 3.11 (come nel runtime.txt)
+# Usa Python 3.11
 FROM python:3.11-slim
 
 # Set working directory
@@ -22,8 +22,16 @@ RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('w
 # Copy tutto il resto dell'app
 COPY . .
 
-# Crea directory per il database se non esiste
-RUN mkdir -p /app/data
+# Crea directory con permessi corretti per database e cache
+RUN mkdir -p /app/data && chmod 777 /app/data
+RUN mkdir -p /app/huggingface_cache && chmod 777 /app/huggingface_cache
+
+# Crea file database vuoto con permessi
+RUN touch /app/data/conversations.db && chmod 666 /app/data/conversations.db
+
+# Imposta le variabili d'ambiente
+ENV HF_HOME=/app/huggingface_cache
+ENV DB_PATH=/app/data/conversations.db
 
 # Expose port 7860 (required by Hugging Face)
 EXPOSE 7860

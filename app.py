@@ -7,6 +7,8 @@ from collections import defaultdict
 from numpy.core.multiarray import scalar
 import numpy as np
 
+os.makedirs('/app/data', exist_ok=True)
+
 #Framework web to create API REST 
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
@@ -172,8 +174,13 @@ class ImprovedChatbotModel(nn.Module):
 
 #to manage conversation memory and create ToDo list table
 class ConversationMemory:
-    def __init__(self, db_path='conversations.db'):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        if db_path is None:
+            self.db_path = os.environ.get('DB_PATH', '/app/data/conversations.db')
+        else:
+            self.db_path = db_path
+         
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self.init_db()
 
     #inizialize db
@@ -256,7 +263,7 @@ class EnhancedChatbotAssistant:
         self.label_to_idx = {}
         self.idx_to_label = {}
         #instance to memorize conversation
-        self.memory = ConversationMemory()
+        self.memory = ConversationMemory('/app/data/conversations.db')
         
         #load intents and model
         self.load_intents()
@@ -1059,5 +1066,5 @@ if __name__ == '__main__':
     print(f"🔑 Weather API: {'✅' if OPENWEATHER_API_KEY else '❌'}")
     print(f"🔑 News API: {'✅' if NEWS_API_KEY else '❌'}")
     print(f"🔑 Stock API: {'✅' if ALPHA_VANTAGE_API_KEY else '❌'}")
-    print(f"🛡️ Rate limiting attivo: Weather (1000/giorno), News (1000/giorno), Stocks (500/giorno, 5/minuto)")
+    print(f"🛡️ Rate limiting attivo: Weather (1000/giorno), News (100/giorno), Stocks (25/giorno, 5/minuto)")
     app.run(host='0.0.0.0', port=port, debug=False)
