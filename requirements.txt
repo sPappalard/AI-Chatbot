@@ -1,13 +1,12 @@
 flask==2.3.3
 flask-cors==4.0.0
-python-dotenv==1.0.0
+python-dotenv==1.0.0 --index-url https://download.pytorch.org/whl/cpu
 nltk==3.9.1
 transformers==4.48.3
 torch==2.6.0
 requests==2.32.3
 protobuf==4.24.2
 numpy==1.26.4
-gunicorn
 scikit-learn
 sentencepiece>=0.2.0
 

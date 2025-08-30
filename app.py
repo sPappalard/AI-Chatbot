@@ -1054,7 +1054,7 @@ def health():
     })
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 7860))
     print(f"🚀 AI Assistant started on port {port}")
     print(f"🔑 Weather API: {'✅' if OPENWEATHER_API_KEY else '❌'}")
     print(f"🔑 News API: {'✅' if NEWS_API_KEY else '❌'}")
