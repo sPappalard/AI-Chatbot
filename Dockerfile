@@ -19,19 +19,20 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Download NLTK data
 RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('wordnet', quiet=True)" || true
 
-# Copy tutto il resto dell'app
+# Copy everything else in the app
 COPY . .
 
-# Crea directory con permessi corretti per database e cache
+# Create directory with correct permission for database e cache
 RUN mkdir -p /app/data && chmod 777 /app/data
 RUN mkdir -p /app/huggingface_cache && chmod 777 /app/huggingface_cache
 
-# Crea file database vuoto con permessi
+# Create empty file database with permission
 RUN touch /app/data/conversations.db && chmod 666 /app/data/conversations.db
 
-# Imposta le variabili d'ambiente
+# Set enviroment variables
 ENV HF_HOME=/app/huggingface_cache
 ENV DB_PATH=/app/data/conversations.db
+ENV DEPLOYMENT_ENV=huggingface
 
 # Expose port 7860 (required by Hugging Face)
 EXPOSE 7860

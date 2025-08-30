@@ -175,12 +175,22 @@ class ImprovedChatbotModel(nn.Module):
 #to manage conversation memory and create ToDo list table
 class ConversationMemory:
     def __init__(self, db_path=None):
+        #to understand if we are in shared docker envirenment (Huggin Face) (true) or local (false)
+        self.is_shared_environment = os.environ.get('DEPLOYMENT_ENV') == 'huggingface'
+        
         if db_path is None:
-            self.db_path = os.environ.get('DB_PATH', '/app/data/conversations.db')
+            if self.is_shared_environment:
+                #shared environment: use temporary memory
+                self.db_path = ':memory:'
+            else: 
+                #local environment: use persistency file
+                self.db_path = os.environ.get('DB_PATH', '/app/data/conversations.db')
         else:
             self.db_path = db_path
-         
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+
+        if not self.is_shared_environment: 
+           os.makedirs(os.path.dirname(self.db_path) if self.db_path != ':memory:' else '/tmp', exist_ok=True)
+       
         self.init_db()
 
     #inizialize db
@@ -191,12 +201,24 @@ class ConversationMemory:
                 CREATE TABLE IF NOT EXISTS conversations (
                     id TEXT PRIMARY KEY,
                     user_id TEXT,
+                    session_id TEXT,
                     timestamp DATETIME,
                     message TEXT,
                     response TEXT,
                     intent TEXT
                 )
             ''')
+
+            #MIGRATION
+            try:
+                conn.execute('ALTER TABLE conversations ADD COLUMN session_id TEXT')
+                print("✅ Aggiunta colonna session_id alla tabella conversations")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e).lower():
+                    print("ℹ️ Colonna session_id già presente")
+                else:
+                    print(f"❌ Errore aggiunta colonna: {e}")
+
             #create ToDo list table
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS todos (
@@ -206,6 +228,26 @@ class ConversationMemory:
                     completed BOOLEAN DEFAULT 0,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     priority INTEGER DEFAULT 1
+                )
+            ''')
+            
+            #MIGRATION
+            try:
+                conn.execute('ALTER TABLE todos ADD COLUMN session_id TEXT')
+                print("✅ Aggiunta colonna session_id alla tabella todos")
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e).lower():
+                    print("ℹ️ Colonna session_id già presente in todos")
+                else:
+                    print(f"❌ Errore aggiunta session_id a todos: {e}")
+
+            # table for tracking sessions
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             conn.commit()
@@ -224,30 +266,84 @@ class ConversationMemory:
             conn.close()
 
     #to add new conversation to the DB
-    def add_conversation(self, user_id, message, response, intent):
+    def add_conversation(self, user_id, message, response, intent, session_id = None):
+        if not session_id:
+            session_id = session.get('session_id', str(uuid.uuid4()))
+        
         #open a connection
         with self.get_db() as conn:
             #insert to DB
             conn.execute('''
-                INSERT INTO conversations (id, user_id, timestamp, message, response, intent)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (str(uuid.uuid4()), user_id, datetime.now(), message, response, intent))
+                INSERT INTO conversations (id, user_id, session_id, timestamp, message, response, intent)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (str(uuid.uuid4()), user_id, session_id, datetime.now(), message, response, intent))
+            
+            #update session activity
+            conn.execute('''
+                INSERT OR REPLACE INTO sessions (session_id, user_id, last_activity)
+                VALUES (?, ?, ?)
+            ''', (session_id, user_id, datetime.now()))
+            
             #confirm the transation
             conn.commit()
 
     #to retrieve the recent context of a specific user
-    def get_recent_context(self, user_id, limit=5):
+    def get_recent_context(self, user_id, limit=5, session_id = None):
         with self.get_db() as conn:
             #select user's last conversation (order by most recent, limited to 5)
-            cursor = conn.execute('''
-                SELECT message, response, intent FROM conversations
-                WHERE user_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            ''', (user_id, limit))
+            if session_id:
+                # Filter by specific session (shared environment)
+                cursor = conn.execute('''
+                    SELECT message, response, intent FROM conversations
+                    WHERE user_id = ? AND session_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ''', (user_id, session_id, limit))
+            else:
+                #use only user_id (local environment)
+                cursor = conn.execute('''
+                    SELECT message, response, intent FROM conversations
+                    WHERE user_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ''', (user_id, limit))
             #return all rows resulting from query 
             return cursor.fetchall()
+    
+    #to delete user's conversations and, if we are in share environment, session's conversations 
+    def clear_user_conversations(self, user_id, session_id=None):
+        with self.get_db() as conn:
+            if session_id:
+                conn.execute('DELETE FROM conversations WHERE user_id = ? AND session_id = ?', (user_id, session_id))
+                conn.execute('DELETE FROM todos WHERE user_id = ? AND session_id = ?', (user_id, session_id))
+            else:
+                conn.execute('DELETE FROM conversations WHERE user_id = ?', (user_id,))
+                conn.execute('DELETE FROM todos WHERE user_id = ?', (user_id,))
+            conn.commit()
 
+    #ONLY FOR LOCAL ENVIRONMENT: clean up old sessions
+    def cleanup_old_sessions(self, days_old=7):
+        if self.is_shared_environment:
+            return 
+        
+        cutoff_date = datetime.now() - timedelta(days=days_old)
+        with self.get_db() as conn:
+            # find 7 days old sessions
+            cursor = conn.execute('''
+                SELECT session_id FROM sessions 
+                WHERE last_activity < ?
+            ''', (cutoff_date,))
+            old_sessions = [row[0] for row in cursor.fetchall()]
+            
+            # delete old sessions
+            for session_id in old_sessions:
+                conn.execute('DELETE FROM conversations WHERE session_id = ?', (session_id,))
+                conn.execute('DELETE FROM todos WHERE session_id = ?', (session_id,))
+                conn.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
+            
+            conn.commit()
+            return len(old_sessions)
+        
 #Chatbot main class  
 class EnhancedChatbotAssistant:
     def __init__(self, intents_path):
@@ -973,6 +1069,9 @@ def index():
     #create a unique ID user 
     if 'user_id' not in session:
         session['user_id'] = str(uuid.uuid4())
+    #create a unique ID session
+    if 'session_id' not in session:
+        session['session_id'] = str(uuid.uuid4())
     return render_template('index.html')
 
 # endpoint /chat: used to send messages (only POST) 
@@ -983,6 +1082,8 @@ def chat():
     message = data.get('message', '').strip()
     #return user id
     user_id = session.get('user_id', 'anonymous')
+    #return session id
+    session_id = session.get('session_id', str(uuid.uuid4()))
     
     if not message:
         return jsonify({'error': 'No message provided'}), 400
@@ -990,23 +1091,74 @@ def chat():
     #process message using AI Chatbot
     response, intent, confidence = assistant.process_message(message, user_id)
     
+    assistant.memory.add_conversation(user_id, message, response, intent, session_id)
+    
     #return a json response with (response, intent, confidence, timestamp and user id)
     return jsonify({
         'response': response,
         'intent': intent,
         'confidence': round(confidence * 100, 1),
         'timestamp': datetime.now().isoformat(),
-        'user_id': user_id
+        'user_id': user_id,
+        'session_id': session_id
     })
 
-# endpoint /history: used to return last 10 user's conversation
+#endpoint /clear-chat: used to clear the session's chat
+@app.route('/clear-chat', methods=['POST'])
+def clear_chat_endpoint():
+    user_id = session.get('user_id', 'anonymous')
+    session_id = session.get('session_id')
+    
+    # clean only session's chat
+    assistant.memory.clear_user_conversations(user_id, session_id)
+    return jsonify({
+        'status': 'success',
+        'message': 'Chat cancellata con successo',
+        'timestamp': datetime.now().isoformat()
+    })
+
+#endpoint /new-session: used to generate new ID session for a new session (Start a new sesssion)
+@app.route('/new-session', methods=['POST'])
+def new_session():
+    session['user_id'] = str(uuid.uuid4())
+    session['session_id'] = str(uuid.uuid4())
+    
+    return jsonify({
+        'status': 'success',
+        'user_id': session['user_id'],
+        'session_id': session['session_id'],
+        'message': 'Nuova sessione iniziata',
+        'timestamp': datetime.now().isoformat()
+    })
+
+
+# endpoint /history: used to return last 10 user and session's conversation
 @app.route('/history', methods=['GET'])
 def history():
     user_id = session.get('user_id', 'anonymous')
+    session_id = session.get('session_id')
+
     #read from DB 
-    history = assistant.memory.get_recent_context(user_id, limit=10)
+    history = assistant.memory.get_recent_context(user_id, limit=10, session_id=session_id)
     #convert to DICT for the JSON serialization
     return jsonify({'history': [dict(h) for h in history]})
+
+# Endpoint for periodic cleaning (only for admine)
+@app.route('/cleanup-old-data', methods=['POST'])
+def cleanup_old_data():
+    admin_key = request.json.get('admin_key') if request.json else None
+    expected_key = os.environ.get('ADMIN_KEY', 'admin123')
+    
+    if admin_key != expected_key:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    cleaned_sessions = assistant.memory.cleanup_old_sessions()
+    return jsonify({
+        'status': 'success',
+        'cleaned_sessions': cleaned_sessions,
+        'message': f'Pulite {cleaned_sessions} sessioni vecchie',
+        'timestamp': datetime.now().isoformat()
+    })
 
 # endpoint /api-stats: used to visualize API stats
 @app.route('/api-stats', methods=['GET'])
@@ -1062,9 +1214,21 @@ def health():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 7860))
+    
+    # Detect deployment environment
+    deployment_env = os.environ.get('DEPLOYMENT_ENV', 'local')
+    
     print(f"🚀 AI Assistant started on port {port}")
     print(f"🔑 Weather API: {'✅' if OPENWEATHER_API_KEY else '❌'}")
     print(f"🔑 News API: {'✅' if NEWS_API_KEY else '❌'}")
     print(f"🔑 Stock API: {'✅' if ALPHA_VANTAGE_API_KEY else '❌'}")
     print(f"🛡️ Rate limiting attivo: Weather (1000/giorno), News (100/giorno), Stocks (25/giorno, 5/minuto)")
+    
+    if deployment_env == 'local':
+        print(f"📁 Database: File persistente")
+        print(f"🧹 Cleanup automatico: Attivo (7 giorni)")
+    else:
+        print(f"📁 Database: Memoria temporanea")
+        print(f"🧹 Cleanup automatico: Disattivo")
+    
     app.run(host='0.0.0.0', port=port, debug=False)

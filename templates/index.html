@@ -873,19 +873,39 @@
                 confirmBtn.style.transform = 'translateY(0)';
                 confirmBtn.style.boxShadow = 'none';
             };
-            confirmBtn.onclick = () => {
-                const chatMessages = document.getElementById('chatMessages');
-                chatMessages.innerHTML = `
-                    <div class="welcome-message">
-                        <div class="welcome-icon">🤖</div>
-                        <h2>Chat Pulita!</h2>
-                        <p>Inizia una nuova conversazione usando i pulsanti sopra.</p>
-                    </div>
-                `;
-                messageCount = 0;
-                updateStats();
-                isFirstMessage = true;
-                showNotification('Chat cancellata con successo! 🗑️');
+            
+            //calls backend to clean the conversation DB
+            confirmBtn.onclick = async () => {
+                try {
+                    const response = await fetch('/clear-chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        // clean also Front End
+                        const chatMessages = document.getElementById('chatMessages');
+                        chatMessages.innerHTML = `
+                            <div class="welcome-message">
+                                <div class="welcome-icon">🤖</div>
+                                <h2>Chat Pulita!</h2>
+                                <p>Inizia una nuova conversazione usando i pulsanti sopra.</p>
+                            </div>
+                        `;
+                        messageCount = 0;
+                        updateStats();
+                        isFirstMessage = true;
+                        showNotification('Chat cancellata definitivamente! 🗑️');
+                    } else {
+                        showNotification('❌ Errore nella cancellazione');
+                    }
+                } catch (error) {
+                    console.error('Errore nel pulire la chat:', error);
+                    showNotification('❌ Errore di connessione');
+                }
+                
                 document.body.removeChild(modal);
             };
             
@@ -908,6 +928,46 @@
             
             document.body.appendChild(modal);
         }
+
+        // to start a new clear session
+        async function startNewSession() {
+            try {
+                const response = await fetch('/new-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // clear the display
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.innerHTML = `
+                        <div class="welcome-message">
+                            <div class="welcome-icon">🤖</div>
+                            <h2>Benvenuto!</h2>
+                            <p>Sono il tuo AI Assistant potenziato! Usa i pulsanti sopra per iniziare rapidamente.</p>
+                        </div>
+                    `;
+                    
+                    // Reset counters
+                    messageCount = 0;
+                    sessionStartTime = Date.now();
+                    isFirstMessage = true;
+                    updateStats();
+                    
+                    showNotification('Nuova sessione avviata! 🎉');
+                } else {
+                    showNotification('❌ Errore nell\'avvio nuova sessione');
+                }
+            } catch (error) {
+                console.error('Errore nuova sessione:', error);
+                showNotification('❌ Errore di connessione');
+            }
+        }
+
 
         // Show API statistics in a modal
         async function showStats() {
@@ -1303,6 +1363,7 @@
             createParticles();
             loadTheme();
             addVoiceButton();
+            addNewSessionButton();
             updateStats();
             
             // Auto-focus input
@@ -1343,17 +1404,24 @@
                 const response = await fetch('/history');
                 const data = await response.json();
                 
+                // Only if there are conversations, show them
                 if (data.history && data.history.length > 0) {
+                    // Clear welcome message first
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.innerHTML = '';
+                    isFirstMessage = false;
+                    
                     // Show recent conversation
                     data.history.reverse().forEach(conv => {
                         addMessage(conv.message, true);
                         addMessage(conv.response, false, conv.intent);
                     });
                 }
+                // If there are no conversations, leave the welcome message
             } catch (error) {
-                console.log('No previous history available');
+                console.log('No previous history available or error loading history');
             }
-        }
+        }        
 
         // Health check
         async function checkHealth() {
@@ -1366,6 +1434,21 @@
                 setStatus(false);
             }
         }
+
+         // add "New session" button to the header
+        function addNewSessionButton() {
+            const headerControls = document.querySelector('.header-controls');
+            
+            const newSessionBtn = document.createElement('button');
+            newSessionBtn.className = 'control-btn';
+            newSessionBtn.innerHTML = '🔄';
+            newSessionBtn.title = 'Inizia Nuova Sessione';
+            newSessionBtn.onclick = startNewSession;
+            
+            // Insert before theme button
+            headerControls.insertBefore(newSessionBtn, headerControls.firstChild);
+        }
+
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
