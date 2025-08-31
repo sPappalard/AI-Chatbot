@@ -1,16 +1,14 @@
 import os
 import json
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
-from collections import defaultdict
-from numpy.core.multiarray import scalar
-import numpy as np
 from contextlib import contextmanager
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
 import logging
 import sqlite3
 import threading
+from zoneinfo import ZoneInfo 
 
 os.makedirs('/app/data', exist_ok=True)
 
@@ -122,7 +120,7 @@ class APIRateLimiter:
         finally:
             conn.close()
     
-    #check if is it possibli to do an API request
+    #check if is it possible to do an API request
     def can_make_request(self, api_type: str, user_session: str = "anonymous") -> Tuple[bool, str, bool]:
         if api_type not in self.API_LIMITS:
             return False, f"API type '{api_type}' not supported", True
@@ -263,20 +261,7 @@ class APIRateLimiter:
             conn.execute('DELETE FROM minute_limits WHERE timestamp < ?', (time.time() - 120,))
             conn.execute('DELETE FROM api_usage_log WHERE timestamp < ?', (cutoff_time,))
             conn.commit()
-    
-    #reset limits (only for ADMIN)
-    def reset_limits(self, admin_key: str) -> Dict:
-        expected_key = os.environ.get('ADMIN_KEY', 'admin123')
-        if admin_key != expected_key:
-            raise PermissionError("Unauthorized")
-        
-        with self.lock:
-            with self._get_db_connection() as conn:
-                conn.execute('DELETE FROM daily_limits')
-                conn.execute('DELETE FROM minute_limits')
-                conn.commit()
-        
-        return {'status': 'success', 'message': 'All limits reset'}
+
 
 # Initialize rate limiter
 rate_limiter = APIRateLimiter('/app/data/rate_limits.db')
@@ -480,29 +465,6 @@ class ConversationMemory:
                 conn.execute('DELETE FROM conversations WHERE user_id = ?', (user_id,))
                 conn.execute('DELETE FROM todos WHERE user_id = ?', (user_id,))
             conn.commit()
-
-    #ONLY FOR LOCAL ENVIRONMENT: clean up old sessions
-    def cleanup_old_sessions(self, days_old=7):
-        if self.is_shared_environment:
-            return 
-        
-        cutoff_date = datetime.now() - timedelta(days=days_old)
-        with self.get_db() as conn:
-            # find 7 days old sessions
-            cursor = conn.execute('''
-                SELECT session_id FROM sessions 
-                WHERE last_activity < ?
-            ''', (cutoff_date,))
-            old_sessions = [row[0] for row in cursor.fetchall()]
-            
-            # delete old sessions
-            for session_id in old_sessions:
-                conn.execute('DELETE FROM conversations WHERE session_id = ?', (session_id,))
-                conn.execute('DELETE FROM todos WHERE session_id = ?', (session_id,))
-                conn.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
-            
-            conn.commit()
-            return len(old_sessions)
         
 #Chatbot main class  
 class EnhancedChatbotAssistant:
@@ -938,8 +900,8 @@ class EnhancedChatbotAssistant:
 
     #to terurn current time 
     def get_current_time(self):
-        """Ora attuale"""
-        now = datetime.now()
+        """Ora attuale (Italia)"""
+        now = datetime.now(ZoneInfo("Europe/Rome"))
         return f"🕐 **Ora attuale:** {now.strftime('%H:%M:%S')}\n" \
                f"📅 **Data:** {now.strftime('%d/%m/%Y')}\n" \
                f"📆 **Giorno:** {now.strftime('%A')}"
@@ -1267,22 +1229,6 @@ def history():
     #convert to DICT for the JSON serialization
     return jsonify({'history': [dict(h) for h in history]})
 
-# Endpoint for periodic cleaning (only for admine)
-@app.route('/cleanup-old-data', methods=['POST'])
-def cleanup_old_data():
-    admin_key = request.json.get('admin_key') if request.json else None
-    expected_key = os.environ.get('ADMIN_KEY', 'admin123')
-    
-    if admin_key != expected_key:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    cleaned_sessions = assistant.memory.cleanup_old_sessions()
-    return jsonify({
-        'status': 'success',
-        'cleaned_sessions': cleaned_sessions,
-        'message': f'Pulite {cleaned_sessions} sessioni vecchie',
-        'timestamp': datetime.now().isoformat()
-    })
 
 # endpoint /api-stats: used to visualize API stats
 @app.route('/api-stats', methods=['GET'])
@@ -1301,24 +1247,6 @@ def api_stats():
             'status': 'error'
         }), 500
 
-# ONLY FOR ADMIN!! (Change in prod)
-# endpoint /reset-limits: used to reset API limit (requires admin key)
-@app.route('/reset-limits', methods=['POST'])
-def reset_limits():
-    """Reset limiti API con gestione errori robusta"""
-    try:
-        admin_key = request.json.get('admin_key') if request.json else None
-        result = rate_limiter.reset_limits(admin_key)
-        
-        return jsonify({
-            'message': result['message'],
-            'new_stats': rate_limiter.get_stats(),
-            'timestamp': datetime.now().isoformat()
-        })
-    except PermissionError:
-        return jsonify({'error': 'Unauthorized'}), 401
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # endpoint /health: used to check service state (check uploaded model, setted API Keys, usage stats)
 @app.route('/health', methods=['GET'])
@@ -1335,80 +1263,7 @@ def health():
         'timestamp': datetime.now().isoformat()
     })
 
-#endpoint /api-health: sed to check API state 
-@app.route('/api-health', methods=['GET'])
-def api_health():
-    try:
-        stats = rate_limiter.get_stats()
-        warnings = []
-        
-        for api_type, data in stats.items():
-            if data['percentage_used'] > 90:
-                warnings.append(f"{api_type} al {data['percentage_used']}% del limite")
-            if data.get('minute_remaining', 5) <= 1:
-                warnings.append(f"{api_type} vicino al limite per minuto")
-        
-        return jsonify({
-            'status': 'healthy',
-            'database_accessible': True,
-            'current_stats': stats,
-            'warnings': warnings,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'database_accessible': False,
-            'error': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
 
-#endpoint /api-dashboard: used to visualize a complete dashboard for ADMINISTRATOR
-@app.route('/api-dashboard', methods=['GET'])
-def api_dashboard():
-    try:
-        admin_key = request.args.get('admin_key')
-        expected_key = os.environ.get('ADMIN_KEY', 'admin123')
-        
-        if admin_key != expected_key:
-            return jsonify({'error': 'Unauthorized - Admin key required'}), 401
-        
-        stats = rate_limiter.get_stats()
-        
-        # Analytics of the last 24 hours
-        cutoff_time = time.time() - (24 * 3600)
-        with rate_limiter._get_db_connection() as conn:
-            cursor = conn.execute('''
-                SELECT api_type, COUNT(*) as total_requests,
-                       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_requests,
-                       SUM(CASE WHEN fallback_used = 1 THEN 1 ELSE 0 END) as fallback_requests,
-                       COUNT(DISTINCT user_session) as unique_users
-                FROM api_usage_log WHERE timestamp >= ?
-                GROUP BY api_type
-            ''', (cutoff_time,))
-            
-            analytics = {}
-            for row in cursor.fetchall():
-                api_type = row['api_type']
-                total = row['total_requests']
-                analytics[api_type] = {
-                    'total_requests': total,
-                    'successful_requests': row['successful_requests'],
-                    'fallback_requests': row['fallback_requests'],
-                    'unique_users': row['unique_users'],
-                    'success_rate': round((row['successful_requests'] / total) * 100, 1) if total > 0 else 0,
-                    'fallback_rate': round((row['fallback_requests'] / total) * 100, 1) if total > 0 else 0
-                }
-        
-        return jsonify({
-            'stats': stats,
-            'analytics_24h': analytics,
-            'timestamp': datetime.now().isoformat(),
-            'status': 'healthy'
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e), 'status': 'error'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 7860))
@@ -1421,9 +1276,6 @@ if __name__ == '__main__':
     print(f"🔑 News API: {'✅' if NEWS_API_KEY else '❌'}")
     print(f"🔑 Stock API: {'✅' if ALPHA_VANTAGE_API_KEY else '❌'}")
     print(f"🛡️ Rate limiting attivo: Weather (1000/giorno), News (100/giorno), Stocks (25/giorno, 5/minuto)")
-    print(f"🔗 Rate Limiting: Database persistente ({rate_limiter.db_path})")
-    print(f"📊 Stats API: /api-stats, /api-health")
-    print(f"🎛️ Admin Dashboard: /api-dashboard?admin_key=admin123")
 
     if deployment_env == 'local':
         print(f"📁 Database: File persistente")

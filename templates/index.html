@@ -462,7 +462,7 @@
 
         .status-indicator {
             position: fixed;
-            top: 20px;
+            top: 80px;
             right: 20px;
             background: var(--card-bg);
             padding: 0.5rem 1rem;
@@ -499,6 +499,9 @@
                 height: 100dvh; /* Dynamic viewport height for mobile */
             }
 
+            .status-indicator {
+                display: none !important; 
+            }
             .header {
                 padding: 0.5rem;
             }
@@ -860,9 +863,6 @@ body {
 
     <div class="header">
         <div class="header-controls">
-            <button class="control-btn" onclick="startNewSession()" title="Inizia Nuova Sessione">
-                🔄
-            </button>
             <button class="control-btn" onclick="toggleTheme()" title="Toggle Dark Mode">
                 🌙
             </button>
@@ -1001,7 +1001,7 @@ body {
             currentTheme = currentTheme === 'light' ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', currentTheme);
             
-            const themeBtn = document.querySelectorAll('.control-btn')[1]; // Second button is theme
+            const themeBtn = document.querySelectorAll('.control-btn')[0]; 
             themeBtn.textContent = currentTheme === 'light' ? '🌙' : '☀️';
             
             showNotification(`Modalità ${currentTheme === 'dark' ? 'Scura' : 'Chiara'} attivata`);
@@ -1014,7 +1014,7 @@ body {
             currentTheme = savedTheme;
             document.documentElement.setAttribute('data-theme', currentTheme);
             
-            const themeBtn = document.querySelectorAll('.control-btn')[1]; // Second button is theme
+            const themeBtn = document.querySelectorAll('.control-btn')[0]; // Second button is theme
             themeBtn.textContent = currentTheme === 'light' ? '🌙' : '☀️';
         }
 
@@ -1151,45 +1151,6 @@ body {
             };
             
             document.body.appendChild(modal);
-        }
-
-        // to start a new clear session
-        async function startNewSession() {
-            try {
-                const response = await fetch('/new-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // clear the display
-                    const chatMessages = document.getElementById('chatMessages');
-                    chatMessages.innerHTML = `
-                        <div class="welcome-message">
-                            <div class="welcome-icon">🤖</div>
-                            <h2>Benvenuto!</h2>
-                            <p>Sono il tuo AI Assistant potenziato! Usa i pulsanti sopra per iniziare rapidamente.</p>
-                        </div>
-                    `;
-                    
-                    // Reset counters
-                    messageCount = 0;
-                    sessionStartTime = Date.now();
-                    isFirstMessage = true;
-                    updateStats();
-                    
-                    showNotification('Nuova sessione avviata! 🎉');
-                } else {
-                    showNotification('❌ Errore nell\'avvio nuova sessione');
-                }
-            } catch (error) {
-                console.error('Errore nuova sessione:', error);
-                showNotification('❌ Errore di connessione');
-            }
         }
 
         // Show API statistics in a modal
@@ -1665,49 +1626,6 @@ body {
             }
         });
 
-        // Add some easter eggs
-        let konamiCode = [];
-        const konamiSequence = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
-
-        document.addEventListener('keydown', function(e) {
-            konamiCode.push(e.code);
-            if (konamiCode.length > konamiSequence.length) {
-                konamiCode.shift();
-            }
-            
-            if (konamiCode.join(',') === konamiSequence.join(',')) {
-                showNotification('🎉 Konami Code attivato! Easter egg sbloccato!');
-                // Add rainbow effect
-                document.body.style.filter = 'hue-rotate(0deg)';
-                let hue = 0;
-                const rainbowInterval = setInterval(() => {
-                    hue += 1;
-                    document.body.style.filter = `hue-rotate(${hue}deg)`;
-                    if (hue >= 360) {
-                        clearInterval(rainbowInterval);
-                        document.body.style.filter = 'none';
-                    }
-                }, 10);
-                konamiCode = [];
-            }
-        });
-
-        // Right-click context menu for messages
-        document.addEventListener('contextmenu', function(e) {
-            if (e.target.closest('.message-content')) {
-                e.preventDefault();
-                showNotification('💡 Usa il pulsante 📋 per copiare!');
-            }
-        });
-
-        // Double-click to quick copy message
-        document.addEventListener('dblclick', function(e) {
-            if (e.target.closest('.message.bot')) {
-                const messageContent = e.target.closest('.message-content').textContent;
-                navigator.clipboard.writeText(messageContent.replace(/📋.*/, '').trim());
-                showNotification('📋 Messaggio copiato con doppio click!');
-            }
-        });
     </script>
 </body>
 </html>
