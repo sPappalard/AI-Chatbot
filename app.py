@@ -6,6 +6,11 @@ import time
 from collections import defaultdict
 from numpy.core.multiarray import scalar
 import numpy as np
+from contextlib import contextmanager
+from typing import Dict, Tuple, Optional
+import logging
+import sqlite3
+import threading
 
 os.makedirs('/app/data', exist_ok=True)
 
@@ -57,69 +62,224 @@ bert_model = AutoModel.from_pretrained('distilbert-base-uncased')
 
 #to manage usage limits external API to avoid exeeding them
 class APIRateLimiter:
-    def __init__(self):
-        # counters for each API (reset every day)
-        self.daily_counters = {
-            'weather': {'count': 0, 'reset_date': datetime.now().date(), 'limit': 1000},
-            'news': {'count': 0, 'reset_date': datetime.now().date(), 'limit': 100},
-            'stocks': {'count': 0, 'reset_date': datetime.now().date(), 'limit': 25}
+    
+    def __init__(self, db_path: str = "/app/data/rate_limits.db"):
+        self.db_path = db_path
+        self.lock = threading.Lock()
+        self.logger = logging.getLogger(__name__)
+        
+        self.API_LIMITS = {
+            'weather': {'daily_limit': 1000, 'minute_limit': None, 'fallback_enabled': True},
+            'news': {'daily_limit': 100, 'minute_limit': None, 'fallback_enabled': True},
+            'stocks': {'daily_limit': 25, 'minute_limit': 5, 'fallback_enabled': True}
         }
         
-        # Rate limiting per minute (Alpha Vantage: 5 calls/minute)
-        self.minute_counters = defaultdict(list)
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        self.init_database()
+        self._last_cleanup = time.time()
+        self._cleanup_interval = 3600
     
-    #Check if we can make a request or not
-    def can_make_request(self, api_type):
-        """Controlla se possiamo fare una richiesta"""
-        today = datetime.now().date()
+    #initialize tables for rate limiting
+    def init_database(self):
+        with self._get_db_connection() as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS daily_limits (
+                    api_type TEXT PRIMARY KEY,
+                    count INTEGER DEFAULT 0,
+                    reset_date TEXT,
+                    last_updated REAL
+                )
+            ''')
+            
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS minute_limits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    api_type TEXT,
+                    timestamp REAL,
+                    UNIQUE(api_type, timestamp)
+                )
+            ''')
+            
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS api_usage_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    api_type TEXT,
+                    timestamp REAL,
+                    success BOOLEAN,
+                    fallback_used BOOLEAN,
+                    user_session TEXT
+                )
+            ''')
+            conn.commit()
+    
+    #connection to rate limiting DB
+    @contextmanager
+    def _get_db_connection(self):
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+    
+    #check if is it possibli to do an API request
+    def can_make_request(self, api_type: str, user_session: str = "anonymous") -> Tuple[bool, str, bool]:
+        if api_type not in self.API_LIMITS:
+            return False, f"API type '{api_type}' not supported", True
         
-        # counters if it is a new day
-        if self.daily_counters[api_type]['reset_date'] != today:
-            self.daily_counters[api_type]['count'] = 0
-            self.daily_counters[api_type]['reset_date'] = today
+        with self.lock:
+            self._cleanup_old_records()
+            
+            daily_ok, daily_msg = self._check_daily_limit(api_type)
+            if not daily_ok:
+                self._log_usage(api_type, False, True, user_session)
+                return False, daily_msg, True
+            
+            minute_ok, minute_msg = self._check_minute_limit(api_type)
+            if not minute_ok:
+                self._log_usage(api_type, False, True, user_session)
+                return False, minute_msg, True
+            
+            return True, "OK", False
+    
+    #check daily limit
+    def _check_daily_limit(self, api_type: str) -> Tuple[bool, str]:
+        today = datetime.now().date().isoformat()
+        daily_limit = self.API_LIMITS[api_type]['daily_limit']
         
-        # check daily limit
-        if self.daily_counters[api_type]['count'] >= self.daily_counters[api_type]['limit']:
-            return False, f"Limite giornaliero raggiunto per {api_type} ({self.daily_counters[api_type]['limit']} chiamate)"
+        with self._get_db_connection() as conn:
+            cursor = conn.execute('SELECT count, reset_date FROM daily_limits WHERE api_type = ?', (api_type,))
+            row = cursor.fetchone()
+            
+            if row is None:
+                conn.execute('INSERT INTO daily_limits (api_type, count, reset_date, last_updated) VALUES (?, 0, ?, ?)', 
+                           (api_type, today, time.time()))
+                conn.commit()
+                return True, "OK"
+            
+            current_count = row['count']
+            reset_date = row['reset_date']
+            
+            if reset_date != today:
+                conn.execute('UPDATE daily_limits SET count = 0, reset_date = ?, last_updated = ? WHERE api_type = ?', 
+                           (today, time.time(), api_type))
+                conn.commit()
+                return True, "OK"
+            
+            if current_count >= daily_limit:
+                remaining_hours = 24 - datetime.now().hour
+                return False, f"Limite giornaliero raggiunto per {api_type} ({current_count}/{daily_limit}). Reset in {remaining_hours}h"
+            
+            return True, "OK"
+    
+    #check minute limit (only for stocks API)
+    def _check_minute_limit(self, api_type: str) -> Tuple[bool, str]:
+        minute_limit = self.API_LIMITS[api_type].get('minute_limit')
+        if minute_limit is None:
+            return True, "OK"
         
-        # check minute limit (only for stocks/Alpha Vantage)
-        if api_type == 'stocks':
+        now = time.time()
+        minute_ago = now - 60
+        
+        with self._get_db_connection() as conn:
+            conn.execute('DELETE FROM minute_limits WHERE api_type = ? AND timestamp < ?', (api_type, minute_ago))
+            cursor = conn.execute('SELECT COUNT(*) as count FROM minute_limits WHERE api_type = ? AND timestamp >= ?', 
+                                (api_type, minute_ago))
+            current_count = cursor.fetchone()['count']
+            
+            if current_count >= minute_limit:
+                return False, f"Limite di {minute_limit} chiamate al minuto raggiunto per {api_type}"
+            
+            conn.commit()
+            return True, "OK"
+    
+    #inrement counter after a succcess call
+    def increment_counter(self, api_type: str, user_session: str = "anonymous"):
+        with self.lock:
             now = time.time()
-            minute_ago = now - 60
             
-            # Remove requests older than 1 minute
-            self.minute_counters[api_type] = [t for t in self.minute_counters[api_type] if t > minute_ago]
+            with self._get_db_connection() as conn:
+                conn.execute('UPDATE daily_limits SET count = count + 1, last_updated = ? WHERE api_type = ?', 
+                           (now, api_type))
+                
+                if self.API_LIMITS[api_type].get('minute_limit'):
+                    conn.execute('INSERT OR IGNORE INTO minute_limits (api_type, timestamp) VALUES (?, ?)', 
+                               (api_type, now))
+                
+                conn.commit()
             
-            if len(self.minute_counters[api_type]) >= 5:
-                return False, "Limite di 5 chiamate al minuto raggiunto per le azioni"
-            
-            # add current timestamp
-            self.minute_counters[api_type].append(now)
-        
-        return True, "OK"
+            self._log_usage(api_type, True, False, user_session)
     
-    #to increase counter after 1 success call
-    def increment_counter(self, api_type):
-        """Incrementa il contatore dopo una chiamata riuscita"""
-        self.daily_counters[api_type]['count'] += 1
+    def _log_usage(self, api_type: str, success: bool, fallback_used: bool, user_session: str):
+        try:
+            with self._get_db_connection() as conn:
+                conn.execute('''INSERT INTO api_usage_log (api_type, timestamp, success, fallback_used, user_session)
+                               VALUES (?, ?, ?, ?, ?)''', (api_type, time.time(), success, fallback_used, user_session))
+                conn.commit()
+        except Exception as e:
+            self.logger.error(f"Errore nel logging utilizzo API: {e}")
     
-    #return API stats (used, limit, remaining)
-    def get_stats(self):
-        """Restituisce statistiche uso API"""
-        today = datetime.now().date()
+    #to obtain all the API statistics
+    def get_stats(self) -> Dict:
         stats = {}
+        today = datetime.now().date().isoformat()
         
-        for api_type, data in self.daily_counters.items():
-            if data['reset_date'] != today:
-                stats[api_type] = {'used': 0, 'limit': data['limit'], 'remaining': data['limit']}
-            else:
-                remaining = data['limit'] - data['count']
-                stats[api_type] = {'used': data['count'], 'limit': data['limit'], 'remaining': remaining}
+        with self._get_db_connection() as conn:
+            for api_type, config in self.API_LIMITS.items():
+                cursor = conn.execute('SELECT count, reset_date FROM daily_limits WHERE api_type = ?', (api_type,))
+                row = cursor.fetchone()
+                
+                used = 0 if row is None or row['reset_date'] != today else row['count']
+                limit = config['daily_limit']
+                remaining = max(0, limit - used)
+                
+                stats[api_type] = {
+                    'used': used, 'limit': limit, 'remaining': remaining,
+                    'percentage_used': round((used / limit) * 100, 1),
+                    'fallback_enabled': config['fallback_enabled']
+                }
+                
+                if config.get('minute_limit'):
+                    minute_ago = time.time() - 60
+                    cursor = conn.execute('SELECT COUNT(*) as minute_count FROM minute_limits WHERE api_type = ? AND timestamp >= ?', 
+                                        (api_type, minute_ago))
+                    minute_used = cursor.fetchone()['minute_count']
+                    stats[api_type].update({
+                        'minute_used': minute_used,
+                        'minute_limit': config['minute_limit'],
+                        'minute_remaining': max(0, config['minute_limit'] - minute_used)
+                    })
         
         return stats
+    
+    def _cleanup_old_records(self):
+        if time.time() - self._last_cleanup < self._cleanup_interval:
+            return
+        
+        self._last_cleanup = time.time()
+        cutoff_time = time.time() - (7 * 24 * 3600)
+        
+        with self._get_db_connection() as conn:
+            conn.execute('DELETE FROM minute_limits WHERE timestamp < ?', (time.time() - 120,))
+            conn.execute('DELETE FROM api_usage_log WHERE timestamp < ?', (cutoff_time,))
+            conn.commit()
+    
+    #reset limits (only for ADMIN)
+    def reset_limits(self, admin_key: str) -> Dict:
+        expected_key = os.environ.get('ADMIN_KEY', 'admin123')
+        if admin_key != expected_key:
+            raise PermissionError("Unauthorized")
+        
+        with self.lock:
+            with self._get_db_connection() as conn:
+                conn.execute('DELETE FROM daily_limits')
+                conn.execute('DELETE FROM minute_limits')
+                conn.commit()
+        
+        return {'status': 'success', 'message': 'All limits reset'}
 
 # Initialize rate limiter
-rate_limiter = APIRateLimiter()
+rate_limiter = APIRateLimiter('/app/data/rate_limits.db')
 
 #---------------------------------------------
 #Neural Netword Model for intent classification:
@@ -230,7 +390,7 @@ class ConversationMemory:
                     priority INTEGER DEFAULT 1
                 )
             ''')
-            
+
             #MIGRATION
             try:
                 conn.execute('ALTER TABLE todos ADD COLUMN session_id TEXT')
@@ -547,49 +707,44 @@ class EnhancedChatbotAssistant:
 
     # to return real weather (API: OpenWeatherMap)
     def get_weather_real(self, city="Roma"):
-        """API OpenWeatherMap con rate limiting"""
-        # check rate limit
-        can_request, message = rate_limiter.can_make_request('weather')
-        if not can_request:
-            return f"⚠️ {message}. Riprova domani!"
+        user_session = session.get('session_id', 'anonymous')
+        can_request, message, use_fallback = rate_limiter.can_make_request('weather', user_session)
+        
+        if use_fallback:
+            fallback_response = self.get_weather_fallback(city)
+            return f"{fallback_response}\n\n⚠️ {message}"
         
         if not OPENWEATHER_API_KEY:
-            return self.get_weather_fallback(city)
+            return f"{self.get_weather_fallback(city)}\n\n⚠️ API key non configurata - usando dati simulati"
         
         try:
             url = f"http://api.openweathermap.org/data/2.5/weather"
-            params = {
-                'q': city,
-                'appid': OPENWEATHER_API_KEY,
-                'units': 'metric',
-                'lang': 'it'
-            }
+            params = {'q': city, 'appid': OPENWEATHER_API_KEY, 'units': 'metric', 'lang': 'it'}
             response = requests.get(url, params=params, timeout=5)
             data = response.json()
             
             if response.status_code == 200:
-                #UPTADE rate limiter
-                rate_limiter.increment_counter('weather')
+                # increment counter only for a success call
+                rate_limiter.increment_counter('weather', user_session)
                 
                 temp = data['main']['temp']
                 feels_like = data['main']['feels_like']
                 humidity = data['main']['humidity']
                 description = data['weather'][0]['description']
                 
-                # add limits info
                 stats = rate_limiter.get_stats()['weather']
                 
-                return f"🌤️ **Meteo {city}:**\n" \
-                       f"🌡️ Temperatura: {temp}°C (percepita {feels_like}°C)\n" \
-                       f"☁️ Condizioni: {description.title()}\n" \
-                       f"💧 Umidità: {humidity}%\n\n" \
-                       f"📊 *API calls rimanenti oggi: {stats['remaining']}/{stats['limit']}*"
+                return  f"🌤️ **Meteo {city}:**\n" \
+                        f"🌡️ Temperatura: {temp}°C (percepita {feels_like}°C)\n" \
+                        f"☁️ Condizioni: {description.title()}\n" \
+                        f"💧 Umidità: {humidity}%\n\n" \
+                        f"📊 *API calls rimanenti oggi: {stats['remaining']}/{stats['limit']}*"
             else:
-                return self.get_weather_fallback(city)
+                return f"{self.get_weather_fallback(city)}\n\n⚠️ Errore API - usando dati simulati"
                 
         except Exception as e:
             print(f"Weather API error: {e}")
-            return self.get_weather_fallback(city)
+            return f"{self.get_weather_fallback(city)}\n\n⚠️ Errore connessione API - usando dati simulati"
 
     #return simulated weather (only if API failed)
     def get_weather_fallback(self, city):
@@ -604,38 +759,31 @@ class EnhancedChatbotAssistant:
 
     # to return real stock prices (API: Alpha Vantage)
     def get_stock_prices_real(self, symbol=None):
-        """API Alpha Vantage con rate limiting per stock specifici"""
-        # check rate limit
-        can_request, message = rate_limiter.can_make_request('stocks')
-        if not can_request:
-            return f"⚠️ {message}. Riprova tra qualche minuto!"
+        user_session = session.get('session_id', 'anonymous')
+        can_request, message, use_fallback = rate_limiter.can_make_request('stocks', user_session)
+        
+        if use_fallback:
+            fallback_response = self.get_stock_prices_fallback(symbol)
+            return f"{fallback_response}\n\n⚠️ {message}"
         
         if not ALPHA_VANTAGE_API_KEY:
-            return self.get_stock_prices_fallback(symbol)
+            return f"{self.get_stock_prices_fallback(symbol)}\n\n⚠️ API key non configurata"
         
         try:
-            # If a stock is not specified, use AAPL as the default
+            #AAPL as a default stock
             if not symbol:
                 symbol = 'AAPL'
             symbol = symbol.upper()
             
             url = f"https://www.alphavantage.co/query"
-            params = {
-                'function': 'GLOBAL_QUOTE',
-                'symbol': symbol,
-                'apikey': ALPHA_VANTAGE_API_KEY
-            }
+            params = {'function': 'GLOBAL_QUOTE', 'symbol': symbol, 'apikey': ALPHA_VANTAGE_API_KEY}
             
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
             
-            # Debug: print API response
-            print(f"Stock API response for {symbol}: {response.status_code}")
-            print(f"Stock API data: {data}")
-            
             if 'Global Quote' in data and data['Global Quote']:
-                # update rate limiter
-                rate_limiter.increment_counter('stocks')
+                # increment counter only for success call
+                rate_limiter.increment_counter('stocks', user_session)
                 
                 quote = data['Global Quote']
                 price = float(quote.get('05. price', 0))
@@ -643,21 +791,19 @@ class EnhancedChatbotAssistant:
                 change_pct = float(quote.get('10. change percent', '0').replace('%', ''))
                 
                 emoji = "📈" if change > 0 else "📉" if change < 0 else "➡️"
-                
-                #add limits info
                 stats = rate_limiter.get_stats()['stocks']
                 
                 return f"📊 **Prezzo Azione {symbol}:**\n" \
                     f"💰 **{symbol}**: ${price:.2f} {emoji} {change_pct:+.2f}%\n\n" \
-                    f"📊 *API calls rimanenti: {stats['remaining']}/{stats['limit']} (giorno), 4/5 (minuto)*"
+                    f"📊 *API calls: {stats['remaining']}/{stats['limit']} (giorno), " \
+                    f"{stats.get('minute_remaining', 'N/A')}/{stats.get('minute_limit', 'N/A')} (minuto)*"
             else:
                 error_msg = data.get('Note', data.get('Information', 'Errore sconosciuto'))
-                print(f"Stock API error for {symbol}: {error_msg}")
-                return self.get_stock_prices_fallback(symbol)
+                return f"{self.get_stock_prices_fallback(symbol)}\n\n⚠️ {error_msg}"
                 
         except Exception as e:
             print(f"Stock API exception for {symbol}: {e}")
-            return self.get_stock_prices_fallback(symbol)
+            return f"{self.get_stock_prices_fallback(symbol)}\n\n⚠️ Errore API - usando dati simulati"
 
     #to return (randomly) simulated stock prices (only if API failed or stock not available)
     def get_stock_prices_fallback(self, symbol=None):
@@ -705,30 +851,26 @@ class EnhancedChatbotAssistant:
     
     # to return real news from US (API: NewsAPI)
     def get_news_real(self):
-        """API NewsAPI con rate limiting"""
-        # check rate limit
-        can_request, message = rate_limiter.can_make_request('news')
-        if not can_request:
-            return f"⚠️ {message}. Riprova domani!"
+        user_session = session.get('session_id', 'anonymous')
+        can_request, message, use_fallback = rate_limiter.can_make_request('news', user_session)
+        
+        if use_fallback:
+            fallback_response = self.get_news_fallback()
+            return f"{fallback_response}\n\n⚠️ {message}"
         
         if not NEWS_API_KEY:
-            return self.get_news_fallback()
+            return f"{self.get_news_fallback()}\n\n⚠️ API key non configurata"
         
         try:
             url = "https://newsapi.org/v2/top-headlines"
-            params = {
-                'country': 'us',
-                'category': 'general',
-                'pageSize': 5,
-                'apiKey': NEWS_API_KEY
-            }
+            params = {'country': 'us', 'category': 'general', 'pageSize': 5, 'apiKey': NEWS_API_KEY}
             
             response = requests.get(url, params=params, timeout=5)
             data = response.json()
             
             if response.status_code == 200 and data['articles']:
-                #update rate limiter
-                rate_limiter.increment_counter('news')
+                # Increment onfly for success call
+                rate_limiter.increment_counter('news', user_session)
                 
                 news_text = "📰 **Ultime Notizie dagli Stati Uniti:**\n\n"
                 
@@ -742,34 +884,16 @@ class EnhancedChatbotAssistant:
                     news_text += f"**{i}.** {title}\n"
                     news_text += f"   *Fonte: {source}*\n\n"
                 
-                # add limit info
                 stats = rate_limiter.get_stats()['news']
                 news_text += f"📊 *API calls rimanenti oggi: {stats['remaining']}/{stats['limit']}*"
                 
                 return news_text
             else:
-                return self.get_news_fallback()
+                return f"{self.get_news_fallback()}\n\n⚠️ Errore nel recupero notizie"
                 
         except Exception as e:
             print(f"News API error: {e}")
-            return self.get_news_fallback()
-
-    #to return simulated news (only if API failed)
-    def get_news_fallback(self):
-        """Notizie simulate"""
-        fake_news = [
-            "🚀 Nuova missione spaziale italiana lanciata con successo",
-            "💻 Importante aggiornamento di sicurezza per tutti i dispositivi",
-            "🏆 L'Italia vince un prestigioso premio internazionale",
-            "🌱 Nuova tecnologia verde sviluppata da startup italiana",
-            "📱 Rilasciata nuova versione dell'app di messaggistica più popolare"
-        ]
-        
-        result = "📰 **Ultime Notizie** (simulate):\n\n"
-        for i, news in enumerate(random.sample(fake_news, 3), 1):
-            result += f"**{i}.** {news}\n\n"
-        
-        return result
+            return f"{self.get_news_fallback()}\n\n⚠️ Errore API - usando notizie simulate"
 
     # to return real crypto prices (API: CoinGecko) (no rate limiting needded)
     def get_crypto_prices(self):
@@ -1163,41 +1287,40 @@ def cleanup_old_data():
 # endpoint /api-stats: used to visualize API stats
 @app.route('/api-stats', methods=['GET'])
 def api_stats():
-    """Endpoint per vedere statistiche uso API"""
-    stats = rate_limiter.get_stats()
-    return jsonify({
-        'api_usage': stats,
-        'timestamp': datetime.now().isoformat()
-    })
+    try:
+        stats = rate_limiter.get_stats()
+        return jsonify({
+            'api_usage': stats,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'healthy'
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'timestamp': datetime.now().isoformat(),
+            'status': 'error'
+        }), 500
 
 # ONLY FOR ADMIN!! (Change in prod)
 # endpoint /reset-limits: used to reset API limit (requires admin key)
 @app.route('/reset-limits', methods=['POST'])
 def reset_limits():
-    """Endpoint per resettare i limiti (solo per admin/development)"""
-    admin_key = request.json.get('admin_key') if request.json else None
-    expected_key = os.environ.get('ADMIN_KEY', 'admin123')  
-    
-    if admin_key != expected_key:
+    """Reset limiti API con gestione errori robusta"""
+    try:
+        admin_key = request.json.get('admin_key') if request.json else None
+        result = rate_limiter.reset_limits(admin_key)
+        
+        return jsonify({
+            'message': result['message'],
+            'new_stats': rate_limiter.get_stats(),
+            'timestamp': datetime.now().isoformat()
+        })
+    except PermissionError:
         return jsonify({'error': 'Unauthorized'}), 401
-    
-    # Reset counters
-    today = datetime.now().date()
-    for api_type in rate_limiter.daily_counters:
-        rate_limiter.daily_counters[api_type]['count'] = 0
-        rate_limiter.daily_counters[api_type]['reset_date'] = today
-    
-    # Clear minute counters
-    rate_limiter.minute_counters.clear()
-    
-    return jsonify({
-        'message': 'Rate limits reset successfully',
-        'new_stats': rate_limiter.get_stats(),
-        'timestamp': datetime.now().isoformat()
-    })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-
-# endpoint /health: used to check service state (chek uploaded model, setted API Keys, usage stats)
+# endpoint /health: used to check service state (check uploaded model, setted API Keys, usage stats)
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({
@@ -1212,6 +1335,81 @@ def health():
         'timestamp': datetime.now().isoformat()
     })
 
+#endpoint /api-health: sed to check API state 
+@app.route('/api-health', methods=['GET'])
+def api_health():
+    try:
+        stats = rate_limiter.get_stats()
+        warnings = []
+        
+        for api_type, data in stats.items():
+            if data['percentage_used'] > 90:
+                warnings.append(f"{api_type} al {data['percentage_used']}% del limite")
+            if data.get('minute_remaining', 5) <= 1:
+                warnings.append(f"{api_type} vicino al limite per minuto")
+        
+        return jsonify({
+            'status': 'healthy',
+            'database_accessible': True,
+            'current_stats': stats,
+            'warnings': warnings,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'database_accessible': False,
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+#endpoint /api-dashboard: used to visualize a complete dashboard for ADMINISTRATOR
+@app.route('/api-dashboard', methods=['GET'])
+def api_dashboard():
+    try:
+        admin_key = request.args.get('admin_key')
+        expected_key = os.environ.get('ADMIN_KEY', 'admin123')
+        
+        if admin_key != expected_key:
+            return jsonify({'error': 'Unauthorized - Admin key required'}), 401
+        
+        stats = rate_limiter.get_stats()
+        
+        # Analytics of the last 24 hours
+        cutoff_time = time.time() - (24 * 3600)
+        with rate_limiter._get_db_connection() as conn:
+            cursor = conn.execute('''
+                SELECT api_type, COUNT(*) as total_requests,
+                       SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_requests,
+                       SUM(CASE WHEN fallback_used = 1 THEN 1 ELSE 0 END) as fallback_requests,
+                       COUNT(DISTINCT user_session) as unique_users
+                FROM api_usage_log WHERE timestamp >= ?
+                GROUP BY api_type
+            ''', (cutoff_time,))
+            
+            analytics = {}
+            for row in cursor.fetchall():
+                api_type = row['api_type']
+                total = row['total_requests']
+                analytics[api_type] = {
+                    'total_requests': total,
+                    'successful_requests': row['successful_requests'],
+                    'fallback_requests': row['fallback_requests'],
+                    'unique_users': row['unique_users'],
+                    'success_rate': round((row['successful_requests'] / total) * 100, 1) if total > 0 else 0,
+                    'fallback_rate': round((row['fallback_requests'] / total) * 100, 1) if total > 0 else 0
+                }
+        
+        return jsonify({
+            'stats': stats,
+            'analytics_24h': analytics,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'healthy'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e), 'status': 'error'}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 7860))
     
@@ -1223,7 +1421,10 @@ if __name__ == '__main__':
     print(f"🔑 News API: {'✅' if NEWS_API_KEY else '❌'}")
     print(f"🔑 Stock API: {'✅' if ALPHA_VANTAGE_API_KEY else '❌'}")
     print(f"🛡️ Rate limiting attivo: Weather (1000/giorno), News (100/giorno), Stocks (25/giorno, 5/minuto)")
-    
+    print(f"🔗 Rate Limiting: Database persistente ({rate_limiter.db_path})")
+    print(f"📊 Stats API: /api-stats, /api-health")
+    print(f"🎛️ Admin Dashboard: /api-dashboard?admin_key=admin123")
+
     if deployment_env == 'local':
         print(f"📁 Database: File persistente")
         print(f"🧹 Cleanup automatico: Attivo (7 giorni)")
