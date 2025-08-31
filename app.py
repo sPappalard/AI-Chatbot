@@ -320,6 +320,8 @@ class ImprovedChatbotModel(nn.Module):
 #to manage conversation memory and create ToDo list table
 class ConversationMemory:
     def __init__(self, db_path=None):
+        #create a dict in the memory to isolate data for each session
+        self._in_memory_storage = {}
         #to understand if we are in shared docker envirenment (Huggin Face) (true) or local (false)
         self.is_shared_environment = os.environ.get('DEPLOYMENT_ENV') == 'huggingface'
         
@@ -338,6 +340,21 @@ class ConversationMemory:
        
         self.init_db()
 
+    #to create a unique key fot the session
+    def _get_session_key(self, user_id, session_id=None):
+        if session_id:
+            return f"{user_id}_{session_id}"
+        return user_id
+    
+    #to be sure that storage exist for this session
+    def _ensure_session_storage(self, session_key):
+        if self.is_shared_environment:
+            if session_key not in self._in_memory_storage:
+                self._in_memory_storage[session_key] = {
+                    'conversations': [],
+                    'todos': []
+                }
+    
     #inizialize db
     def init_db(self):
         with self.get_db() as conn:
@@ -412,59 +429,169 @@ class ConversationMemory:
 
     #to add new conversation to the DB
     def add_conversation(self, user_id, message, response, intent, session_id = None):
-        if not session_id:
-            session_id = session.get('session_id', str(uuid.uuid4()))
-        
-        #open a connection
-        with self.get_db() as conn:
-            #insert to DB
-            conn.execute('''
-                INSERT INTO conversations (id, user_id, session_id, timestamp, message, response, intent)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (str(uuid.uuid4()), user_id, session_id, datetime.now(), message, response, intent))
+        if self.is_shared_environment:
+            # Use in-memory storage for shared environment (Hugging Face)
+            if not session_id:
+                session_id = session.get('session_id', str(uuid.uuid4()))
+                
+            session_key = self._get_session_key(user_id, session_id)
+            self._ensure_session_storage(session_key)
             
-            #update session activity
-            conn.execute('''
-                INSERT OR REPLACE INTO sessions (session_id, user_id, last_activity)
-                VALUES (?, ?, ?)
-            ''', (session_id, user_id, datetime.now()))
+            conversation = {
+                'id': str(uuid.uuid4()),
+                'user_id': user_id,
+                'session_id': session_id,
+                'timestamp': datetime.now(),
+                'message': message,
+                'response': response,
+                'intent': intent
+            }
+            self._in_memory_storage[session_key]['conversations'].append(conversation)
+
+        else:
+            # Use database for local environment
+            if not session_id:
+                session_id = session.get('session_id', str(uuid.uuid4()))
             
-            #confirm the transation
-            conn.commit()
+            #open a connection
+            with self.get_db() as conn:
+                #insert to DB
+                conn.execute('''
+                    INSERT INTO conversations (id, user_id, session_id, timestamp, message, response, intent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (str(uuid.uuid4()), user_id, session_id, datetime.now(), message, response, intent))
+                
+                #update session activity
+                conn.execute('''
+                    INSERT OR REPLACE INTO sessions (session_id, user_id, last_activity)
+                    VALUES (?, ?, ?)
+                ''', (session_id, user_id, datetime.now()))
+                
+                #confirm the transation
+                conn.commit()
 
     #to retrieve the recent context of a specific user
     def get_recent_context(self, user_id, limit=5, session_id = None):
-        with self.get_db() as conn:
-            #select user's last conversation (order by most recent, limited to 5)
-            if session_id:
-                # Filter by specific session (shared environment)
-                cursor = conn.execute('''
-                    SELECT message, response, intent FROM conversations
-                    WHERE user_id = ? AND session_id = ?
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                ''', (user_id, session_id, limit))
-            else:
-                #use only user_id (local environment)
-                cursor = conn.execute('''
-                    SELECT message, response, intent FROM conversations
-                    WHERE user_id = ?
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                ''', (user_id, limit))
-            #return all rows resulting from query 
-            return cursor.fetchall()
+        if self.is_shared_environment:
+            # Use in-memory storage for shared environment
+            session_key = self._get_session_key(user_id, session_id)
+            self._ensure_session_storage(session_key)
+            
+            conversations = self._in_memory_storage[session_key]['conversations']
+            # Return the most recent conversations (most recent first)
+            recent = conversations[-limit:] if conversations else []
+            return [{'message': c['message'], 'response': c['response'], 'intent': c['intent']} 
+                for c in reversed(recent)]
+        else:
+            #use database for locla environment
+            with self.get_db() as conn:
+                #select user's last conversation (order by most recent, limited to 5)
+                if session_id:
+                    # Filter by specific session (shared environment)
+                    cursor = conn.execute('''
+                        SELECT message, response, intent FROM conversations
+                        WHERE user_id = ? AND session_id = ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    ''', (user_id, session_id, limit))
+                else:
+                    #use only user_id (local environment)
+                    cursor = conn.execute('''
+                        SELECT message, response, intent FROM conversations
+                        WHERE user_id = ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    ''', (user_id, limit))
+                #return all rows resulting from query 
+                return cursor.fetchall()
     
     #to delete user's conversations and, if we are in share environment, session's conversations 
     def clear_user_conversations(self, user_id, session_id=None):
-        with self.get_db() as conn:
-            if session_id:
-                conn.execute('DELETE FROM conversations WHERE user_id = ? AND session_id = ?', (user_id, session_id))
-                conn.execute('DELETE FROM todos WHERE user_id = ? AND session_id = ?', (user_id, session_id))
-            else:
-                conn.execute('DELETE FROM conversations WHERE user_id = ?', (user_id,))
-                conn.execute('DELETE FROM todos WHERE user_id = ?', (user_id,))
-            conn.commit()
+        if self.is_shared_environment:
+            # Delete only data from this specific session
+            session_key = self._get_session_key(user_id, session_id)
+            if session_key in self._in_memory_storage:
+                self._in_memory_storage[session_key] = {
+                    'conversations': [],
+                    'todos': []
+                }
+        else:
+            with self.get_db() as conn:
+                if session_id:
+                    conn.execute('DELETE FROM conversations WHERE user_id = ? AND session_id = ?', (user_id, session_id))
+                    conn.execute('DELETE FROM todos WHERE user_id = ? AND session_id = ?', (user_id, session_id))
+                else:
+                    conn.execute('DELETE FROM conversations WHERE user_id = ?', (user_id,))
+                    conn.execute('DELETE FROM todos WHERE user_id = ?', (user_id,))
+                conn.commit()
+
+    def add_todo(self, user_id, task, priority=1, session_id=None):
+        if self.is_shared_environment:
+            session_key = self._get_session_key(user_id, session_id)
+            self._ensure_session_storage(session_key)
+            
+            # Find next available ID
+            existing_todos = self._in_memory_storage[session_key]['todos']
+            next_id = max([t['id'] for t in existing_todos], default=0) + 1
+            
+            todo = {
+                'id': next_id,
+                'user_id': user_id,
+                'task': task,
+                'completed': False,
+                'created_at': datetime.now(),
+                'priority': priority,
+                'session_id': session_id
+            }
+            self._in_memory_storage[session_key]['todos'].append(todo)
+            return next_id
+        else:
+            with self.get_db() as conn:
+                cursor = conn.execute('INSERT INTO todos (user_id, task, priority, session_id) VALUES (?, ?, ?, ?)', 
+                                    (user_id, task, priority, session_id))
+                conn.commit()
+                return cursor.lastrowid
+
+    def get_todos(self, user_id, session_id=None):
+        if self.is_shared_environment:
+            session_key = self._get_session_key(user_id, session_id)
+            self._ensure_session_storage(session_key)
+            
+            todos = self._in_memory_storage[session_key]['todos']
+            # Return only uncompleted TODOs, sorted by priority
+            return [t for t in todos if not t['completed']]
+        else:
+            with self.get_db() as conn:
+                cursor = conn.execute('''
+                    SELECT id, task, priority FROM todos 
+                    WHERE user_id=? AND session_id=? AND completed=0 
+                    ORDER BY priority DESC, created_at ASC
+                ''', (user_id, session_id))
+                return cursor.fetchall()
+    
+    def complete_todo(self, user_id, todo_id, session_id=None):
+        if self.is_shared_environment:
+            session_key = self._get_session_key(user_id, session_id)
+            self._ensure_session_storage(session_key)
+            
+            todos = self._in_memory_storage[session_key]['todos']
+            for todo in todos:
+                if todo['id'] == todo_id and not todo['completed']:
+                    todo['completed'] = True
+                    return todo['task']
+            return None
+        else:
+            with self.get_db() as conn:
+                cursor = conn.execute('SELECT task FROM todos WHERE id=? AND user_id=? AND session_id=? AND completed=0', 
+                                    (todo_id, user_id, session_id))
+                todo = cursor.fetchone()
+                
+                if todo:
+                    conn.execute('UPDATE todos SET completed=1 WHERE id=? AND user_id=? AND session_id=?', 
+                            (todo_id, user_id, session_id))
+                    conn.commit()
+                    return todo['task']
+                return None
         
 #Chatbot main class  
 class EnhancedChatbotAssistant:
@@ -920,6 +1047,8 @@ class EnhancedChatbotAssistant:
 
     #to do management
     def manage_todo(self, user_id, action, task=None, priority=1):
+        session_id = session.get('session_id')
+        
         if action == 'add' and task:
             # Extract priority from text if present and set it
             if any(word in task.lower() for word in ['importante', 'urgente', 'priorità']):
@@ -929,24 +1058,14 @@ class EnhancedChatbotAssistant:
             else:
                 priority = 2
             
-            #insert task into db (with priority)
-            with self.memory.get_db() as conn:
-                conn.execute('INSERT INTO todos (user_id, task, priority) VALUES (?, ?, ?)', 
-                           (user_id, task, priority))
-                conn.commit()
-            
+            # Use new ConversationMemory method
+            todo_id = self.memory.add_todo(user_id, task, priority, session_id)
             priority_text = {1: "bassa", 2: "media", 3: "alta"}[priority]
             return f"✅ Aggiunto '{task}' con priorità {priority_text}."
 
-        #show task list order by priority    
         elif action == 'list':
-            with self.memory.get_db() as conn:
-                cursor = conn.execute('''
-                    SELECT id, task, priority FROM todos 
-                    WHERE user_id=? AND completed=0 
-                    ORDER BY priority DESC, created_at ASC
-                ''', (user_id,))
-                todos = cursor.fetchall()
+            # Use new ConversationMemory method
+            todos = self.memory.get_todos(user_id, session_id)
             
             if not todos:
                 return "📝 La tua lista è vuota! 🎉"
@@ -961,25 +1080,19 @@ class EnhancedChatbotAssistant:
             result += "\n💡 *Scrivi 'completa [numero]' per completare un task*"
             return result
 
-        #complete task (set as completed)     
         elif action == 'complete' and task:
             try:
                 task_id = int(task)
-                with self.memory.get_db() as conn:
-                    cursor = conn.execute('SELECT task FROM todos WHERE id=? AND user_id=? AND completed=0', 
-                                        (task_id, user_id))
-                    todo = cursor.fetchone()
-                    
-                    if todo:
-                        conn.execute('UPDATE todos SET completed=1 WHERE id=? AND user_id=?', 
-                                   (task_id, user_id))
-                        conn.commit()
-                        return f"🎉 Task completato: '{todo['task']}'!"
-                    else:
-                        return "❌ Task non trovato o già completato."
+                # Use new ConversationMemory method
+                completed_task = self.memory.complete_todo(user_id, task_id, session_id)
+                
+                if completed_task:
+                    return f"🎉 Task completato: '{completed_task}'!"
+                else:
+                    return "❌ Task non trovato o già completato."
             except:
                 return "❌ ID task non valido."
-                
+        
         return "❓ Comando todo non riconosciuto. Prova: 'aggiungi [task]', 'mostra lista', 'completa [id]'"
     
     #-------------------
