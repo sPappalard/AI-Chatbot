@@ -696,7 +696,121 @@ class EnhancedChatbotAssistant:
         
         # create a sorted list (without duplicates) for the display
         self.stock_symbols_display = sorted(list(set(self.available_stocks.values())))
-    
+
+        self.supported_cities = {
+            # main italian cities
+            'roma': 'Rome,IT',
+            'milano': 'Milan,IT', 
+            'napoli': 'Naples,IT',
+            'torino': 'Turin,IT',
+            'palermo': 'Palermo,IT',
+            'genova': 'Genoa,IT',
+            'bologna': 'Bologna,IT',
+            'firenze': 'Florence,IT',
+            'bari': 'Bari,IT',
+            'catania': 'Catania,IT',
+            'venezia': 'Venice,IT',
+            'verona': 'Verona,IT',
+            'messina': 'Messina,IT',
+            'padova': 'Padua,IT',
+            'trieste': 'Trieste,IT',
+            'brescia': 'Brescia,IT',
+            'taranto': 'Taranto,IT',
+            'prato': 'Prato,IT',
+            'modena': 'Modena,IT',
+            'reggio calabria': 'Reggio Calabria,IT',
+            'reggio emilia': 'Reggio Emilia,IT',
+            'perugia': 'Perugia,IT',
+            'livorno': 'Livorno,IT',
+            'ravenna': 'Ravenna,IT',
+            'cagliari': 'Cagliari,IT',
+            'foggia': 'Foggia,IT',
+            'rimini': 'Rimini,IT',
+            'salerno': 'Salerno,IT',
+            'ferrara': 'Ferrara,IT',
+            'sassari': 'Sassari,IT',
+            'monza': 'Monza,IT',
+            'bergamo': 'Bergamo,IT',
+            'pescara': 'Pescara,IT',
+            'trento': 'Trento,IT',
+            'forli': 'Forli,IT',
+            'vicenza': 'Vicenza,IT',
+            'terni': 'Terni,IT',
+            'bolzano': 'Bolzano,IT',
+            'novara': 'Novara,IT',
+            'ancona': 'Ancona,IT',
+            
+            # European cities
+            'londra': 'London,GB',
+            'parigi': 'Paris,FR',
+            'berlino': 'Berlin,DE',
+            'madrid': 'Madrid,ES',
+            'amsterdam': 'Amsterdam,NL',
+            'bruxelles': 'Brussels,BE',
+            'vienna': 'Vienna,AT',
+            'zurigo': 'Zurich,CH',
+            'oslo': 'Oslo,NO',
+            'stoccolma': 'Stockholm,SE',
+            'copenaghen': 'Copenhagen,DK',
+            'helsinki': 'Helsinki,FI',
+            'dublino': 'Dublin,IE',
+            'lisbona': 'Lisbon,PT',
+            'atene': 'Athens,GR',
+            'varsavia': 'Warsaw,PL',
+            'praga': 'Prague,CZ',
+            'budapest': 'Budapest,HU',
+            'bucarest': 'Bucharest,RO',
+            'sofia': 'Sofia,BG',
+            
+            # Main world cities
+            'new york': 'New York,US',
+            'los angeles': 'Los Angeles,US',
+            'chicago': 'Chicago,US',
+            'miami': 'Miami,US',
+            'las vegas': 'Las Vegas,US',
+            'san francisco': 'San Francisco,US',
+            'boston': 'Boston,US',
+            'washington': 'Washington,US',
+            'seattle': 'Seattle,US',
+            'toronto': 'Toronto,CA',
+            'vancouver': 'Vancouver,CA',
+            'montreal': 'Montreal,CA',
+            'tokyo': 'Tokyo,JP',
+            'osaka': 'Osaka,JP',
+            'seoul': 'Seoul,KR',
+            'pechino': 'Beijing,CN',
+            'shanghai': 'Shanghai,CN',
+            'hong kong': 'Hong Kong,HK',
+            'singapore': 'Singapore,SG',
+            'bangkok': 'Bangkok,TH',
+            'mumbai': 'Mumbai,IN',
+            'delhi': 'Delhi,IN',
+            'bangalore': 'Bangalore,IN',
+            'sydney': 'Sydney,AU',
+            'melbourne': 'Melbourne,AU',
+            'auckland': 'Auckland,NZ',
+            'rio de janeiro': 'Rio de Janeiro,BR',
+            'san paolo': 'Sao Paulo,BR',
+            'buenos aires': 'Buenos Aires,AR',
+            'lima': 'Lima,PE',
+            'citta del messico': 'Mexico City,MX',
+            'bogota': 'Bogota,CO',
+            'santiago': 'Santiago,CL',
+            'caracas': 'Caracas,VE',
+            'il cairo': 'Cairo,EG',
+            'johannesburg': 'Johannesburg,ZA',
+            'casablanca': 'Casablanca,MA',
+            'lagos': 'Lagos,NG',
+            'istanbul': 'Istanbul,TR',
+            'mosca': 'Moscow,RU',
+            'dubai': 'Dubai,AE',
+            'riyadh': 'Riyadh,SA',
+            'tel aviv': 'Tel Aviv,IL'
+        }
+
+        # Sorted list of the cities for the display
+        self.cities_display_list = self._create_cities_display_list()
+
     #to exstract stock symbol from user's message
     def extract_stock_symbol(self, message):
         """Estrae il simbolo dello stock dal messaggio"""
@@ -718,7 +832,6 @@ class EnhancedChatbotAssistant:
 
     #to generate an help message about best available stocks (group by categories)
     def get_stocks_help_message(self):
-        """Restituisce messaggio di aiuto per le azioni"""
         categories = {
             "🔥 **Tech Giants**": ["AAPL", "MSFT", "GOOGL", "META", "AMZN", "NFLX", "TSLA", "NVDA"],
             "🏦 **Finanziari**": ["JPM", "BAC", "WFC", "GS", "V", "MA", "PYPL"],
@@ -746,6 +859,102 @@ class EnhancedChatbotAssistant:
         result += "• 'Azioni Tesla oggi' o 'Azioni TSLA'\n"
         result += "• 'Microsoft stock' o 'MSFT prezzo'\n\n"
         result += f"📈 *Totale: {len(self.stock_symbols_display)} azioni disponibili*"
+        
+        return result
+
+    #to create a sorted list of the cities for the display
+    def _create_cities_display_list(self):
+        italian_cities = []
+        european_cities = []
+        world_cities = []
+        
+        for city_name, api_name in self.supported_cities.items():
+            if ',IT' in api_name:
+                italian_cities.append(city_name.title())
+            elif any(country in api_name for country in [',GB', ',FR', ',DE', ',ES', ',NL', ',BE', ',AT', ',CH', ',NO', ',SE', ',DK', ',FI', ',IE', ',PT', ',GR', ',PL', ',CZ', ',HU', ',RO', ',BG']):
+                european_cities.append(city_name.title())
+            else:
+                world_cities.append(city_name.title())
+        
+        return {
+            'italian': sorted(italian_cities),
+            'european': sorted(european_cities),
+            'world': sorted(world_cities)
+        }
+
+    #to extract the name of the city from the message
+    def extract_city_from_message(self, message):
+        message_lower = message.lower()
+        
+        # First look for exact matches (compound cities)
+        for city_key in sorted(self.supported_cities.keys(), key=len, reverse=True):
+            if city_key in message_lower:
+                return city_key, self.supported_cities[city_key]
+        
+        # If it doesn't find exact matches, look for individual words that could be cities
+        words = message_lower.split()
+        potential_cities = []
+
+        # List of candidates to be excluded
+        excluded_words = {
+            'meteo', 'tempo', 'clima', 'previsioni', 'che', 'come', 'oggi', 'domani', 'fare', 
+            'bel', 'bello', 'brutto', 'cattivo', 'piove', 'sole', 'nuvoloso', 'sereno',
+            'caldo', 'freddo', 'umido', 'secco', 'vento', 'ventoso', 'piovoso',
+            'temperatura', 'gradi', 'gradi', 'centigradi', 'celsius', 'fahrenheit',
+            'dove', 'quando', 'perché', 'cosa', 'quale', 'quanto', 'chi',
+            'il', 'la', 'lo', 'gli', 'le', 'un', 'una', 'del', 'della', 'dello',
+            'di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'a', 'ad',
+            'ma', 'però', 'tuttavia', 'quindi', 'allora', 'poi', 'dopo', 'prima',
+            'molto', 'tanto', 'poco', 'abbastanza', 'troppo', 'più', 'meno',
+            'fa', 'sarà', 'era', 'è', 'sono', 'hanno', 'hai', 'ho', 'ha'
+        }
+        
+        for word in words:
+            if (len(word) > 2 and 
+                word not in excluded_words and 
+                not word.endswith('?') and 
+                not word.endswith('!') and
+                word.isalpha()):
+                potential_cities.append(word)
+        
+        # Returns only if there is ONLY ONE candidate word
+        if len(potential_cities) == 1:
+            return None, potential_cities
+        else:
+            return None, None
+
+    # to obtain help cities's message
+    def get_cities_help_message(self):
+        cities = self.cities_display_list
+        
+        result = "🌍 **Città Disponibili per il Meteo:**\n\n"
+        
+        result += "🇮🇹 **Italia** (selezione):\n"
+        italia_sample = cities['italian'][:15]
+        result += f"   {' • '.join(italia_sample)}"
+        if len(cities['italian']) > 15:
+            result += f" *+{len(cities['italian'])-15} altre*"
+        result += "\n\n"
+        
+        result += "🇪🇺 **Europa** (capitali principali):\n"
+        europa_sample = cities['european'][:12]
+        result += f"   {' • '.join(europa_sample)}"
+        if len(cities['european']) > 12:
+            result += f" *+{len(cities['european'])-12} altre*"
+        result += "\n\n"
+        
+        result += "🌎 **Mondo** (selezione):\n"
+        world_sample = cities['world'][:10]
+        result += f"   {' • '.join(world_sample)}"
+        if len(cities['world']) > 10:
+            result += f" *+{len(cities['world'])-10} altre*"
+        result += "\n\n"
+        
+        result += "💡 **Esempi di utilizzo:**\n"
+        result += "• 'Che tempo fa a Roma?'\n"
+        result += "• 'Meteo Milano oggi'\n"
+        result += "• 'Previsioni Londra'\n\n"
+        result += f"📊 *Totale: {len(self.supported_cities)} città disponibili*"
         
         return result
 
@@ -795,20 +1004,29 @@ class EnhancedChatbotAssistant:
 #------------------------------------
 
     # to return real weather (API: OpenWeatherMap)
-    def get_weather_real(self, city="Roma"):
+    def get_weather_real(self, city_input="Roma"):
         user_session = session.get('session_id', 'anonymous')
         can_request, message, use_fallback = rate_limiter.can_make_request('weather', user_session)
         
         if use_fallback:
-            fallback_response = self.get_weather_fallback(city)
+            fallback_response = self.get_weather_fallback(city_input)
             return f"{fallback_response}\n\n⚠️ {message}"
         
         if not OPENWEATHER_API_KEY:
-            return f"{self.get_weather_fallback(city)}\n\n⚠️ API key non configurata - usando dati simulati"
+            return f"{self.get_weather_fallback(city_input)}\n\n⚠️ API key non configurata - usando dati simulati"
+        
+        # Determine the city to use for the API
+        if city_input.lower() in self.supported_cities:
+            city_key = city_input.lower()
+            api_city = self.supported_cities[city_key]
+            display_city = city_key.title()
+        else:
+            # Unsupported city
+            return f"❌ **Città '{city_input}' non disponibile.**\n\nLe città disponibili sono:\n\n{self.get_cities_help_message()}"
         
         try:
             url = f"http://api.openweathermap.org/data/2.5/weather"
-            params = {'q': city, 'appid': OPENWEATHER_API_KEY, 'units': 'metric', 'lang': 'it'}
+            params = {'q': api_city, 'appid': OPENWEATHER_API_KEY, 'units': 'metric', 'lang': 'it'}
             response = requests.get(url, params=params, timeout=5)
             data = response.json()
             
@@ -823,21 +1041,22 @@ class EnhancedChatbotAssistant:
                 
                 stats = rate_limiter.get_stats()['weather']
                 
-                return  f"🌤️ **Meteo {city}:**\n" \
+                return  f"🌤️ **Meteo {display_city}:**\n" \
                         f"🌡️ Temperatura: {temp}°C (percepita {feels_like}°C)\n" \
                         f"☁️ Condizioni: {description.title()}\n" \
                         f"💧 Umidità: {humidity}%\n\n" \
                         f"📊 *API calls rimanenti oggi: {stats['remaining']}/{stats['limit']}*"
+            elif response.status_code == 404:
+                return f"❌ **L'API OpenWeather non supporta la città '{display_city}'.**\n\nProva con una città simile o scegli dalla lista:\n\n{self.get_cities_help_message()}"
             else:
-                return f"{self.get_weather_fallback(city)}\n\n⚠️ Errore API - usando dati simulati"
+                return f"{self.get_weather_fallback(display_city)}\n\n⚠️ Errore API (codice {response.status_code}) - usando dati simulati"
                 
         except Exception as e:
             print(f"Weather API error: {e}")
-            return f"{self.get_weather_fallback(city)}\n\n⚠️ Errore connessione API - usando dati simulati"
+            return f"{self.get_weather_fallback(display_city)}\n\n⚠️ Errore connessione API - usando dati simulati"
 
     #return simulated weather (only if API failed)
     def get_weather_fallback(self, city):
-        """Meteo simulato se API non disponibile o limite superato"""
         temps = [18, 19, 20, 21, 22, 23, 24, 25]
         conditions = ["soleggiato", "parzialmente nuvoloso", "nuvoloso"]
         
@@ -857,11 +1076,11 @@ class EnhancedChatbotAssistant:
         
         if not ALPHA_VANTAGE_API_KEY:
             return f"{self.get_stock_prices_fallback(symbol)}\n\n⚠️ API key non configurata"
+ 
+        if not symbol:
+            return "❓ **Specifica quale azione ti interessa!**\n\n💡 **Esempio:** 'Prezzo azione Apple' o 'Prezzo AAPL'\n\n" + self.get_stocks_help_message()
         
         try:
-            #AAPL as a default stock
-            if not symbol:
-                symbol = 'AAPL'
             symbol = symbol.upper()
             
             url = f"https://www.alphavantage.co/query"
@@ -896,47 +1115,64 @@ class EnhancedChatbotAssistant:
 
     #to return (randomly) simulated stock prices (only if API failed or stock not available)
     def get_stock_prices_fallback(self, symbol=None):
-        """Prezzi stock simulati - SOLO quando API non disponibile o azione non supportata"""
-        popular_stocks = {
-            'AAPL': random.uniform(180, 190),
-            'MSFT': random.uniform(370, 380), 
-            'GOOGL': random.uniform(135, 145),
-            'META': random.uniform(320, 340),
-            'AMZN': random.uniform(140, 160),
-            'TSLA': random.uniform(240, 260),
-            'NVDA': random.uniform(490, 510),
-            'NFLX': random.uniform(450, 470),
-            'JPM': random.uniform(145, 155),
-            'V': random.uniform(240, 250),
-            'JNJ': random.uniform(160, 170),
-            'KO': random.uniform(58, 62),
-            'DIS': random.uniform(95, 105),
-            'BA': random.uniform(200, 220)
-        }
         
-        if symbol:
-            symbol = symbol.upper()
-            if symbol in self.stock_symbols_display:
-                price = popular_stocks.get(symbol, random.uniform(50, 500))
-                change = random.choice(["📈", "📉", "➡️"])
-                pct = random.uniform(-5, 5)
-                return f"📊 **Prezzo Azione {symbol}** (simulato - API non disponibile):\n💰 **{symbol}**: ${price:.2f} {change} {pct:+.2f}%"
+        if not symbol:
+            return "❓ **Specifica quale azione ti interessa!**\n\n💡 **Esempio:** 'Prezzo azione Apple' o 'Prezzo AAPL'\n\n" + self.get_stocks_help_message()
+        
+        symbol = symbol.upper()
+        if symbol in self.stock_symbols_display:
+            # Generate a simulated price based on a realistic logic: Use the symbol as a seed to always have the same price for the same stock
+            random.seed(hash(symbol) % 1000)
+            
+            # Approximate base prices for some known stocks
+            base_prices = {
+            # Tech Giants
+            'AAPL': 180, 'MSFT': 375, 'GOOGL': 140, 'META': 330, 'AMZN': 150,
+            'TSLA': 250, 'NVDA': 500, 'NFLX': 460, 'AMD': 120, 'INTC': 45,
+            
+            # Finance
+            'JPM': 150, 'BAC': 35, 'WFC': 45, 'GS': 380, 'MS': 90, 'V': 245, 'MA': 420, 'PYPL': 65,
+            
+            # Health/Pharma
+            'JNJ': 165, 'PFE': 30, 'MRNA': 80, 'ABT': 110, 'MRK': 105,
+            
+            # Energy
+            'XOM': 110, 'CVX': 160, 'COP': 120,
+            
+            # Consumer/Retail
+            'KO': 60, 'PEP': 170, 'PG': 155, 'NKE': 105, 'WMT': 160, 'HD': 350, 'MCD': 280, 'SBUX': 95, 'DIS': 100,
+            
+            # Industrial
+            'BA': 210, 'CAT': 340, 'MMM': 105, 'GE': 170, 'LMT': 480,
+            
+            # Telecom
+            'VZ': 40, 'T': 20, 'TMUS': 160,
+            
+            # Altri
+            'BRK.B': 440, 'IBM': 190, 'ORCL': 130, 'CRM': 250, 'ZM': 70, 'SHOP': 80, 'UBER': 70, 'ABNB': 140
+            }
+            
+            if symbol in base_prices:
+                #use the price in base_prices
+                base_price = base_prices[symbol]
             else:
-                return f"❌ **Azione '{symbol}' non supportata.**\n\n{self.get_stocks_help_message()}"
+                #generate a simulate (deterministic, thanks to the seed link to the symbol) price
+                hash_value = sum(ord(c) for c in symbol)
+                base_price = 50 + (hash_value % 450)  # Range 50-500
         
-        # if stock not specificated 
-        result = "📊 **Top Azioni** (simulato - API non disponibile):\n\n"
-        display_stocks = dict(list(popular_stocks.items())[:8])  # shows first 8 stocks
-        
-        for symbol, price in display_stocks.items():
-            change = random.choice(["📈", "📉", "➡️"])
-            pct = random.uniform(-3, 3)
-            result += f"• **{symbol}**: ${price:.2f} {change} {pct:+.2f}%\n"
-        
-        result += f"\n💡 *Per vedere un'azione specifica scrivi: 'prezzo [nome azione]'*\n"
-        result += f"📋 *{len(self.stock_symbols_display)} azioni disponibili - scrivi 'azioni disponibili' per la lista completa*"
-        
-        return result
+            # Add a random change of ±5%
+            variation = random.uniform(-0.05, 0.05)
+            price = base_price * (1 + variation)
+            
+            change_pct = random.uniform(-5, 5)
+            change_emoji = "📈" if change_pct > 0 else "📉" if change_pct < 0 else "➡️"
+            
+            # Random seed reset
+            random.seed()
+            return f"📊 **Prezzo Azione {symbol}** (simulato - API non disponibile):\n💰 **{symbol}**: ${price:.2f} {change_emoji} {change_pct:+.2f}%"
+        else:
+            return f"❌ **Azione '{symbol}' non supportata.**\n\n{self.get_stocks_help_message()}"
+           
     
     # to return real news from US (API: NewsAPI)
     def get_news_real(self):
@@ -1107,7 +1343,7 @@ class EnhancedChatbotAssistant:
             intent = self.intents[predicted_idx] if predicted_idx < len(self.intents) else 'unknown'
         
         # Confidence threshold for asking clarification
-        if confidence < 0.5:
+        if confidence < 0.8:
             help_message = self.get_help_message()
             response = f"🤔 Non sono sicuro di aver capito la tua richiesta. {help_message}"
         
@@ -1137,23 +1373,46 @@ class EnhancedChatbotAssistant:
                     else:
                         # No actions specified or not recognized
                         if any(word in message.lower() for word in ['prezzo', 'quanto', 'valore', 'quotazione', 'stock', 'azione']):
-                            # User asked for a price but without specifying the unrecognized stock or stock
-                            response = f"🤔 **Dimmi quale azione ti interessa!**\n\n{self.get_stocks_help_message()}"
+                            # The user is likely to have specified an unrecognized action
+                            # Extract possible words that could be action symbols
+                            words = [word.upper() for word in message.split() if len(word) >= 2 and word.isalpha()]
+                            potential_symbols = [word for word in words if word not in ['PREZZO', 'AZIONE', 'AZIONI', 'QUANTO', 'VALE', 'COSTA', 'STOCK']]
+                    
+                            if potential_symbols:
+                                # The user likely specified an unsupported action
+                                response = f"❌ **Azione non riconosciuta o non supportata:** {', '.join(potential_symbols)}\n\n💡 **Esempio corretto:** 'Prezzo azione Apple' o 'Prezzo AAPL'\n\n{self.get_stocks_help_message()}"
+                            else:
+                                # Price request without specific action
+                                response = "❓ **Specifica quale azione ti interessa!**\n\n💡 **Esempio:** 'Prezzo azione Apple' o 'Prezzo AAPL'\n\n" + self.get_stocks_help_message()
                         else:
                             # Generic request for stocks - show help
                             response = f"📊 **Servizio Azioni Disponibile!**\n\n{self.get_stocks_help_message()}"
                         
         # CASE 2: weather
         elif intent == 'weather':
-            # Extract city from message if present
-            city = "Roma"  # Default
-            italian_cities = ['roma', 'milano', 'napoli', 'torino', 'palermo', 'genova', 'bologna', 'firenze', 'bari', 'catania']
-            for c in italian_cities:
-                if c in message.lower():
-                    city = c.title()
-                    break
-            response = self.get_weather_real(city)
-            
+            #check if user ask the list of supported cities
+            if any(phrase in message.lower() for phrase in ['disponibili', 'lista', 'elenco', 'quali città', 'che città', 'città supportate', 'città']):
+                response = f"🌍 **Servizio Meteo Disponibile!**\n\n{self.get_cities_help_message()}"
+            else:
+                # Extract city from message if present
+                city_key, potential_cities = self.extract_city_from_message(message)
+                
+                if city_key:
+                    # City recognised
+                    response = self.get_weather_real(city_key)
+                elif potential_cities:
+                    # Words found but not recognized as cities
+                    potential_str = ', '.join(potential_cities)
+                    response = f"❓ **Non ho riconosciuto la città: '{potential_str}'**\n\nSpecifica meglio la città o scegli dalla lista disponibile.\n\n💡 **Esempio:** 'Che tempo fa a Roma?'\n\n{self.get_cities_help_message()}"
+                else:
+                    # No cities specified - use Rome as default
+                    default_weather = self.get_weather_real("roma")
+                    if '🌤️ **Meteo Roma:**' in default_weather:
+                        weather_content = default_weather.split('🌤️ **Meteo Roma:**\n')[1]
+                        response = f"🏠 **Da me che sto a Roma, il meteo è questo:**\n\n{weather_content}"
+                    else:
+                        response = f"🏠 **Da me che sto a Roma, il meteo è questo:**\n\n{default_weather}"
+                    
         # CASE 3: news
         elif intent == 'news':
             response = self.get_news_real()
@@ -1243,7 +1502,7 @@ class EnhancedChatbotAssistant:
             "₿ **Crypto**: 'Prezzo Bitcoin', 'Crypto oggi'",
             "📝 **Todo List**: 'Aggiungi comprare latte', 'Mostra lista', 'Completa 1'",
             "😄 **Barzellette**: 'Raccontami una barzelletta', 'Fai ridere'",
-            "🕐 **Orario**: 'Che ore sono?', 'Data di oggi'"
+            "🕐 **Orario**: 'Che ore sono?', 'Dimmi l'orario'"
         ]
         
         return (
