@@ -1033,17 +1033,6 @@ class EnhancedChatbotAssistant:
                f"📅 **Data:** {now.strftime('%d/%m/%Y')}\n" \
                f"📆 **Giorno:** {now.strftime('%A')}"
 
-    #to return a random joke
-    def get_joke(self):
-        """Barzellette casuali"""
-        jokes = [
-            "Perché i programmatori preferiscono il buio? Perché la luce attira i bug! 🐛",
-            "Come chiami un pesce con due ginocchia? Un pesce-ginocchio! 🐟",
-            "Cosa dice un AI quando è felice? 'Sono a 1 e 0 dalla felicità!' 🤖",
-            "Perché l'AI non si ammala mai? Perché ha sempre l'antivirus aggiornato! 💻",
-            "Cosa fa un bot quando è triste? Si auto-debugga! 🔧"
-        ]
-        return random.choice(jokes)
 
     #to do management
     def manage_todo(self, user_id, action, task=None, priority=1):
@@ -1175,7 +1164,11 @@ class EnhancedChatbotAssistant:
 
         # CASE 5: joke
         elif intent == 'joke':
-            response = self.get_joke()
+            responses = self.intents_data.get(intent, {}).get('responses', [])
+            if responses:
+                response = random.choice(responses)
+            else:
+                response = "Scusami ma non ne ricordo nessuna! " + self.get_help_message()
         
         # CASE 6: to do
         elif intent == 'todo':

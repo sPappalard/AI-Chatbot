@@ -1,0 +1,202 @@
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": [
+        "Ciao", "Ciao!", "Ehi", "Hey", "Salve", "Buongiorno", "Buonasera", "Ehilà",
+        "Buon pomeriggio", "Ciao a tutti", "Salve a te", "Buona giornata",
+        "Ciao amico", "Ciao caro", "Buon inizio giornata", "Salve amici", 
+        "Salve!", "Buon mattino", "Ciao bella", "Ciao bello", "Ehi tu", "Salutoni",
+        "Wee", "Yo", "Aloha", "Presente!", "Eccomi", "Sono qui", "Dimmi tutto",
+        "Iniziamo", "Partiamo", "Ci siamo", "Let's go", "Si parte", "Via!", "Start"
+      ],
+      "responses": [
+        "Ciao! Come posso aiutarti oggi? 😊",
+        "Salve! Sono qui per assisterti. Di cosa hai bisogno?",
+        "Buongiorno! Come posso esserti utile?",
+        "Ciao! Sono il tuo assistente AI. Come posso aiutarti?",
+        "Ehi! Pronto a rispondere alle tue domande!",
+        "Presente! Cosa posso fare per te oggi?",
+        "Eccomi qui! Dimmi pure come posso aiutarti!"
+      ]
+    },
+    {
+      "tag": "goodbye",
+      "patterns": [
+        "Ciao ciao", "Arrivederci", "A presto", "Ci vediamo", "Buona giornata",
+        "Addio", "A dopo", "Ci sentiamo", "Fino alla prossima", "Buonanotte",
+        "Salutami", "Alla prossima", "Ci sentiamo dopo", "A più tardi", "Ciao, a presto!",
+        "Buona serata", "A domani", "Ci vediamo domani", "Ci sentiamo domani",
+        "Arrivederci a presto", "A presto, ciao", "Ciao e a presto", "Ci sentiamo dopo!",
+        "Bye", "Bye bye", "See ya", "Ciaone", "Stammi bene", "Buon proseguimento",
+        "Vado via", "Me ne vado", "Devo andare", "Ci sentiamo", "A prestissimo",
+        "Buona vita", "Ti lascio", "Scappo", "Devo scappare", "Fine", "Finito", "Stop"
+      ],
+      "responses": [
+        "Arrivederci! È stato un piacere aiutarti! 👋",
+        "A presto! Buona giornata!",
+        "Ciao! Torna quando vuoi!",
+        "Arrivederci! Sono sempre qui se hai bisogno!",
+        "Ci vediamo presto! Resto a disposizione!",
+        "Buona giornata! A presto! 😊",
+        "Ciao ciao! È stato bello chattare con te!"
+      ]
+    },
+    {
+      "tag": "thanks",
+      "patterns": [
+        "Grazie", "Grazie mille", "Ti ringrazio", "Molte grazie", "Grazie dell'aiuto",
+        "Sei stato utile", "Perfetto grazie", "Grazie tante", "Ti sono grato", 
+        "Molto gentile", "Grazie per l'assistenza", "Grazie davvero", "Grazie di cuore",
+        "Ti ringrazio molto", "Grazie, sei stato fantastico", "Molto apprezzato", 
+        "Grazie infinite", "Ti ringrazio tanto", "Grazie davvero tanto", "Grazie per tutto",
+        "Ti sono grata", "Grazie davvero per l'aiuto", "Grazie mille per il supporto",
+        "Thanks", "Thank you", "Thx", "Gracias", "Merci", "Danke", "Ottimo lavoro",
+        "Ben fatto", "Perfetto", "Eccellente", "Top", "Grande", "Fantastico",
+        "Sei il migliore", "Super", "Incredibile", "Amazing", "Perfect", "Awesome"
+      ],
+      "responses": [
+        "Prego! Sono felice di esserti stato utile! 😊",
+        "Di nulla! È un piacere aiutarti!",
+        "Figurati! Sono qui per questo!",
+        "Prego! Se hai bisogno di altro, chiedi pure!",
+        "Sempre a disposizione!",
+        "È stato un piacere! 🙂",
+        "Felice di averti aiutato!"
+      ]
+    },
+    {
+      "tag": "weather",
+      "patterns": [
+        "Che tempo fa?", "Com'è il meteo?", "Previsioni del tempo", "Piove oggi?", 
+        "C'è il sole?", "Temperatura attuale?", "Meteo Milano", "Che tempo fa a Roma?", 
+        "E domani?", "Previsioni domani", "Meteo oggi", "Come sarà il tempo?", 
+        "Ci sarà pioggia?", "Temperature attuali", "Come sarà il meteo oggi?", 
+        "Meteo previsto", "Previsioni locali", "Clima attuale", "Che tempo farà domani?",
+        "Mi dici il meteo?", "Come sarà il clima oggi?", "C'è rischio di pioggia?",
+        "Fa caldo?", "Fa freddo?", "Nevicherà?", "Vento oggi?", "Umidità?",
+        "Temperatura esterna", "Gradi oggi", "Clima", "Atmospheric conditions",
+        "Weather forecast", "Rain today?", "Sunny?", "Cloudy?", "Temperature now",
+        "Meteo Napoli", "Tempo Torino", "Clima Palermo", "Meteo Bari", "Tempo Firenze"
+      ],
+      "responses": []
+    },
+    {
+      "tag": "stocks",
+      "patterns": [
+        "Azioni", "Borsa", "Prezzi azioni", "Mercato azionario", "Quotazioni",
+        "Apple stock", "NASDAQ", "Come va la borsa", "Prezzi delle azioni",
+        "Azioni oggi", "Borsa italiana", "Titoli azionari", "Mercato oggi",
+        "Cosa succede in borsa", "Aggiornamento azioni", "Andamento borsa",
+        "Prezzi borsa", "Aggiornamento mercato azionario", "Andamento titoli",
+        "Stock market", "Shares", "Trading", "Investment", "Finance",
+        "AAPL", "TSLA", "GOOGL", "MSFT", "AMZN", "META", "NVDA",
+        "Dow Jones", "S&P 500", "FTSE MIB", "Euro Stoxx", "Nikkei",
+        "Criptovalute", "Bitcoin", "Ethereum", "Crypto", "BTC", "ETH",
+        "Prezzi crypto", "Mercato crypto", "Andamento Bitcoin", "Valore Ethereum"
+      ],
+      "responses": []
+    },
+    {
+      "tag": "news",
+      "patterns": [
+        "Ultime notizie", "Novità", "Cosa succede nel mondo", "News", 
+        "Notizie di oggi", "Breaking news", "Aggiornamenti", "Mostra le notizie", 
+        "Ultime novità", "Notizie principali", "Rassegna stampa", "News recenti", 
+        "Cosa sta succedendo", "Aggiornamento news", "Notizie ora", 
+        "News in tempo reale", "Ultim'ora", "Aggiornamenti principali",
+        "Cronaca", "Attualità", "Informazione", "Giornali", "Headlines",
+        "Breaking", "Flash news", "News del giorno", "Fatti del giorno",
+        "Notizie Italia", "News mondo", "Cronaca locale", "Politica", "Sport news",
+        "Tech news", "Economia news", "Salute news", "Scienza news"
+      ],
+      "responses": []
+    },
+    {
+      "tag": "todo",
+      "patterns": [
+        "Todo list", "Lista delle cose da fare", "Aggiungi task", "Mostra todo",
+        "Completa task", "Cose da fare", "Promemoria", "Aggiungi alla lista",
+        "Mostra la mia lista", "Elenca task", "Aggiorna lista", "Gestisci attività",
+        "Task da fare", "Lista task", "Cosa devo fare", "Organizza attività",
+        "Mostrami i miei task", "Aggiungi promemoria", "Elenca la lista delle cose da fare",
+        "To do", "Tasks", "Activities", "Schedule", "Planning", "Planner",
+        "Agenda", "Calendario attività", "Programma giornata", "Impegni",
+        "Attività da svolgere", "Lista impegni", "Cosa ho da fare",
+        "Aggiungi comprare il pane", "Ricordami di", "Non dimenticare",
+        "Segna che devo", "Appunta", "Nota", "Reminder", "Memo"
+      ],
+      "responses": []
+    },
+    {
+      "tag": "help",
+      "patterns": [
+        "Aiuto", "Cosa puoi fare", "Funzionalità", "Comandi", "Help", 
+        "Come funzioni", "Cosa sai fare", "Capacità", "Indicazioni", 
+        "Mostrami opzioni", "Guida", "Istruzioni", "Supporto", 
+        "Come usare il bot", "Cosa posso chiederti", "Dammi istruzioni", "Mostrami le funzionalità",
+        "Info", "Manual", "Tutorial", "Guide", "Documentation",
+        "Come si usa", "Spiegami", "Istruzioni per l'uso", "Manuale",
+        "Come posso usarti", "Che servizi offri", "Lista comandi",
+        "Menu", "Opzioni disponibili", "Features", "Services", "Commands list"
+      ],
+      "responses": []
+    },
+    {
+      "tag": "name",
+      "patterns": [
+        "Come ti chiami", "Chi sei", "Qual è il tuo nome", "Presentati", 
+        "Tu chi sei", "Dimmi il tuo nome", "Chi sei tu", "Mi dici il tuo nome",
+        "Il tuo nome?", "Come ti chiami esattamente?", "Presentati, per favore",
+        "Come ti chiami AI?", "Come ti chiami davvero?", "Qual è il tuo nome completo?",
+        "What's your name", "Who are you", "Name?", "Your name?",
+        "Identità", "Presentazione", "Chi è che parla", "Con chi sto parlando",
+        "Tu sei?", "Identificati", "Nome e cognome", "Come devo chiamarti"
+      ],
+      "responses": [
+        "🤖 Sono AI Assistant, il tuo assistente virtuale personale!",
+        "Mi chiamo AI Assistant e sono qui per renderti la vita più semplice!",
+        "Sono il tuo AI Assistant, progettato per aiutarti in tutto! 😊"
+      ]
+    },
+    {
+      "tag": "mood",
+      "patterns": [
+        "Come stai", "Come va", "Tutto bene", "Come ti senti", "Stai bene", 
+        "Va tutto bene", "Come ti senti oggi", "Come stai oggi", "Tutto ok?", 
+        "Come ti senti ora?", "Stai bene oggi?", "Come va ora?", "Come va oggi?",
+        "Come ti senti veramente?", "Come va in generale?", "Tutto bene oggi?",
+        "How are you", "How do you feel", "Are you ok", "Everything fine?",
+        "Che umore hai", "Come ti trovi", "Tutto a posto", "Va tutto bene?",
+        "Come procede", "Come te la passi", "Sei in forma", "Ti senti bene?",
+        "Hey, come va?", "Ehi, come stai?", "Come va?", "Hey come va"
+      ],
+      "responses": [
+        "😊 Sto benissimo, grazie! Sono pronto ad aiutarti con tutto!",
+        "🚀 Tutto perfetto! Sono qui per assisterti. Tu come stai?",
+        "⚡ Ottimamente! Pronto a darti una mano con qualsiasi cosa!",
+        "💪 In piena forma! Cosa posso fare per te oggi?"
+      ]
+    },
+    {
+      "tag": "time",
+      "patterns": [
+        "Che ora è", "Che ore sono", "Dimmi l'ora", "Ora attuale", "Che ora",
+        "What time is it", "Current time", "Time now", "Tell me the time",
+        "Orario", "Ora esatta", "Che ore sono adesso", "L'ora per favore",
+        "Orologio", "Tempo attuale", "Hour", "Che ora fa", "Ore"
+      ],
+      "responses": []
+    },
+    {
+      "tag": "joke",
+      "patterns": [
+        "Raccontami una barzelletta", "Dimmi una battuta", "Fai ridere", "Joke",
+        "Barzelletta", "Battuta", "Scherzo", "Qualcosa di divertente",
+        "Make me laugh", "Tell me a joke", "Funny", "Humor",
+        "Ridere", "Divertente", "Comico", "Spiritoso", "Una risata"
+      ],
+      "responses": []
+    }
+  ]
+}
