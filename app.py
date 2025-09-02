@@ -1047,7 +1047,7 @@ class EnhancedChatbotAssistant:
             elif response.status_code == 404:
                 return f"❌ **L'API OpenWeather non supporta la città '{display_city}'.**\n\nProva con una città simile o scegli dalla lista:\n\n{self.get_cities_help_message()}"
             else:
-                return f"{self.get_weather_fallback(display_city)}\n\n⚠️ Errore API (codice {response.status_code}) - usando dati simulati"
+                return f"{self.get_weather_fallback(display_city)}\n\n⚠️ Errore API - usando dati simulati"
                 
         except Exception as e:
             print(f"Weather API error: {e}")
@@ -1104,7 +1104,7 @@ class EnhancedChatbotAssistant:
                     f"📊 *API calls: {stats['remaining']}/{stats['limit']} (giorno), " \
                     f"{stats.get('minute_remaining', 'N/A')}/{stats.get('minute_limit', 'N/A')} (minuto)*"
             else:
-                error_msg = data.get('Note', data.get('Information', 'Errore sconosciuto'))
+                error_msg = 'API non disponibili/limite raggiunto'
                 return f"{self.get_stock_prices_fallback(symbol)}\n\n⚠️ {error_msg}"
                 
         except Exception as e:

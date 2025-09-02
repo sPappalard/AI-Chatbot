@@ -69,7 +69,7 @@ An intelligent chatbot based on **DistilBERT** with advanced features for weathe
 
 ## 📱 Screenshots
 
-### Main Interface
+### Main Interface (Light mode and Dark mode)
 ![Light mode](imm/1.png)
 
 ![Dark mode](imm/2.png)
