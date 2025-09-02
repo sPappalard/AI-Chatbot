@@ -70,22 +70,25 @@ An intelligent chatbot based on **DistilBERT** with advanced features for weathe
 ## 📱 Screenshots
 
 ### Main Interface
-*[Add screenshot showing the main chat interface with both light and dark modes]*
+![Light mode](imm/1.png)
+
+![Dark mode](imm/2.png)
 
 ### Weather Service
-*[Add screenshot showing weather query and response]*
+![Weather service](imm/3.png)
 
-### Stock Prices
-*[Add screenshot showing stock price queries with different companies]*
+### Stock/Crypto Prices
+![Crypto service](imm/4.png)
 
 ### TODO List Management
-*[Add screenshot showing TODO list functionality]*
+![ToDo list service](imm/5.png)
 
 ### API Statistics Panel
-*[Add screenshot showing API usage limits and statistics]*
+![API Statistics Panel](imm/6.png)
 
-### Settings and Features
-*[Add screenshot showing clear chat, new session, and other controls]*
+
+### Help menu
+![Help menu](imm/7.png)
 
 ## 🔧 Installation & Setup
 
